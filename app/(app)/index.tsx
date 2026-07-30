@@ -8,7 +8,7 @@ import { FoodScatter } from '../../components/FoodScatter';
 import { ZipModal } from '../../components/ZipModal';
 import { useAuth } from '../../context/AuthContext';
 import { colors, fonts, radii, shadow, spacing } from '../../theme/theme';
-import { toDateKey } from '../../utils/date';
+import { MONTH_NAMES, toDateKey } from '../../utils/date';
 
 export default function CalendarHome() {
   const { user, updateZip } = useAuth();
@@ -25,7 +25,7 @@ export default function CalendarHome() {
         <View style={styles.topRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.hello}>Hey {user?.displayName} 👋</Text>
-            <Text style={styles.tagline}>What's on the menu these two weeks?</Text>
+            <Text style={styles.tagline}>What's on the menu this month?</Text>
           </View>
           <Pressable
             onPress={() => router.push('/(app)/profile')}
@@ -48,7 +48,9 @@ export default function CalendarHome() {
           <Text style={styles.zipChange}>Change</Text>
         </Pressable>
 
-        <Text style={styles.rangeLabel}>This week & next</Text>
+        <Text style={styles.rangeLabel}>
+          {MONTH_NAMES[new Date().getMonth()]} {new Date().getFullYear()}
+        </Text>
 
         <CalendarGrid onSelectDay={openDay} />
 

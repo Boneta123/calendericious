@@ -26,14 +26,19 @@ export const MONTH_NAMES = [
 ];
 
 /**
- * 14 dates covering the current week + next week, starting at the Sunday of
- * the week that contains `from`. No previous days are included.
+ * A 6-row (42-cell) grid covering `month`, padded with the adjacent days that
+ * fill the first and last weeks. Sunday-first to match WEEKDAY_LABELS.
  */
-export function buildTwoWeekGrid(from: Date): Date[] {
-  const start = new Date(from.getFullYear(), from.getMonth(), from.getDate() - from.getDay());
+export function buildMonthGrid(year: number, month: number): Date[] {
+  const first = new Date(year, month, 1);
+  const startOffset = first.getDay(); // leading days from the previous month
+  const gridStart = new Date(year, month, 1 - startOffset);
+
   const days: Date[] = [];
-  for (let i = 0; i < 14; i++) {
-    days.push(new Date(start.getFullYear(), start.getMonth(), start.getDate() + i));
+  for (let i = 0; i < 42; i++) {
+    days.push(
+      new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + i),
+    );
   }
   return days;
 }
