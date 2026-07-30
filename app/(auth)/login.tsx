@@ -1,6 +1,7 @@
 import { Link, router } from 'expo-router';
 import { useState } from 'react';
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -9,6 +10,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { FOOD_FRIENDS } from '../../assets/foodCharacters';
+import { BrandLogo } from '../../components/BrandLogo';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { TextField } from '../../components/TextField';
 import { useAuth } from '../../context/AuthContext';
@@ -42,8 +45,15 @@ export default function LogIn() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.header}>
-            <Text style={styles.kicker}>🍽️  DEALDAY</Text>
-            <Text style={styles.title}>Welcome{'\n'}back, hungry.</Text>
+            <BrandLogo width={300} />
+            <Image
+              source={FOOD_FRIENDS}
+              resizeMode="contain"
+              accessible={false}
+              importantForAccessibility="no-hide-descendants"
+              style={styles.friends}
+            />
+            <Text style={styles.title}>Welcome back, hungry.</Text>
             <Text style={styles.sub}>Log in to see today's deals near you.</Text>
           </View>
 
@@ -81,21 +91,28 @@ export default function LogIn() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.paper },
   content: { padding: spacing.xl, paddingBottom: spacing.xxxl, flexGrow: 1 },
-  header: { marginBottom: spacing.xl, marginTop: spacing.xxl },
-  kicker: {
-    fontFamily: fonts.monoBold,
-    fontSize: 13,
-    color: colors.tomato,
-    letterSpacing: 2,
-    marginBottom: spacing.md,
+  header: { alignItems: 'center', marginBottom: spacing.xl, marginTop: spacing.lg },
+  friends: {
+    width: '100%',
+    height: 120,
+    marginTop: spacing.xs,
+    marginBottom: spacing.sm,
   },
-  title: { fontFamily: fonts.display, fontSize: 40, color: colors.ink, lineHeight: 48, paddingTop: 2 },
+  title: {
+    fontFamily: fonts.display,
+    fontSize: 30,
+    color: colors.ink,
+    lineHeight: 36,
+    paddingTop: 2,
+    textAlign: 'center',
+  },
   sub: {
     fontFamily: fonts.body,
     fontSize: 15,
     color: colors.inkSoft,
     marginTop: spacing.sm,
     lineHeight: 22,
+    textAlign: 'center',
   },
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: spacing.xl },
   footerText: { fontFamily: fonts.bodySemi, fontSize: 15, color: colors.inkSoft },

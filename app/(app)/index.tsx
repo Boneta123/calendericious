@@ -2,7 +2,9 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { BrandLogo } from '../../components/BrandLogo';
 import { CalendarGrid } from '../../components/CalendarGrid';
+import { FoodScatter } from '../../components/FoodScatter';
 import { ZipModal } from '../../components/ZipModal';
 import { useAuth } from '../../context/AuthContext';
 import { colors, fonts, radii, shadow, spacing } from '../../theme/theme';
@@ -23,7 +25,9 @@ export default function CalendarHome() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
+      <FoodScatter />
       <ScrollView contentContainerStyle={styles.content}>
+        <BrandLogo width={150} style={{ marginBottom: spacing.md }} />
         {/* Greeting + ZIP chip */}
         <View style={styles.topRow}>
           <View style={{ flex: 1 }}>

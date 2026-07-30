@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { BrandLogo } from '../../components/BrandLogo';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { TextField } from '../../components/TextField';
 import { useAuth } from '../../context/AuthContext';
@@ -47,8 +48,8 @@ export default function SignUp() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.header}>
-            <Text style={styles.kicker}>🍽️  DEALDAY</Text>
-            <Text style={styles.title}>Claim a seat{'\n'}at the table.</Text>
+            <BrandLogo width={300} />
+            <Text style={styles.title}>Claim a seat at the table.</Text>
             <Text style={styles.sub}>
               Create an account and we'll surface the tastiest deals near your ZIP.
             </Text>
@@ -106,21 +107,22 @@ export default function SignUp() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.paper },
   content: { padding: spacing.xl, paddingBottom: spacing.xxxl },
-  header: { marginBottom: spacing.xl },
-  kicker: {
-    fontFamily: fonts.monoBold,
-    fontSize: 13,
-    color: colors.tomato,
-    letterSpacing: 2,
-    marginBottom: spacing.md,
+  header: { alignItems: 'center', marginTop: -spacing.lg, marginBottom: spacing.xl },
+  title: {
+    fontFamily: fonts.display,
+    fontSize: 30,
+    color: colors.ink,
+    lineHeight: 36,
+    paddingTop: 2,
+    textAlign: 'center',
   },
-  title: { fontFamily: fonts.display, fontSize: 40, color: colors.ink, lineHeight: 48, paddingTop: 2 },
   sub: {
     fontFamily: fonts.body,
     fontSize: 15,
     color: colors.inkSoft,
     marginTop: spacing.sm,
     lineHeight: 22,
+    textAlign: 'center',
   },
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: spacing.xl },
   footerText: { fontFamily: fonts.bodySemi, fontSize: 15, color: colors.inkSoft },
