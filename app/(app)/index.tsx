@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BrandLogo } from '../../components/BrandLogo';
 import { CalendarGrid } from '../../components/CalendarGrid';
@@ -8,31 +8,24 @@ import { FoodScatter } from '../../components/FoodScatter';
 import { ZipModal } from '../../components/ZipModal';
 import { useAuth } from '../../context/AuthContext';
 import { colors, fonts, radii, shadow, spacing } from '../../theme/theme';
-import { MONTH_NAMES, toDateKey } from '../../utils/date';
+import { toDateKey } from '../../utils/date';
 
 export default function CalendarHome() {
   const { user, updateZip } = useAuth();
-  const [cursor, setCursor] = useState(() => new Date());
   const [zipModal, setZipModal] = useState(false);
-
-  const year = cursor.getFullYear();
-  const month = cursor.getMonth();
-
-  const shiftMonth = (delta: number) =>
-    setCursor(new Date(year, month + delta, 1));
 
   const openDay = (date: Date) => router.push(`/(app)/day/${toDateKey(date)}`);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <FoodScatter />
-      <ScrollView contentContainerStyle={styles.content}>
+      <View style={styles.content}>
         <BrandLogo width={150} style={{ marginBottom: spacing.md }} />
         {/* Greeting + ZIP chip */}
         <View style={styles.topRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.hello}>Hey {user?.displayName} 👋</Text>
-            <Text style={styles.tagline}>What's on the menu this month?</Text>
+            <Text style={styles.tagline}>What's on the menu these two weeks?</Text>
           </View>
           <Pressable
             onPress={() => router.push('/(app)/profile')}
@@ -55,26 +48,15 @@ export default function CalendarHome() {
           <Text style={styles.zipChange}>Change</Text>
         </Pressable>
 
-        {/* Month switcher */}
-        <View style={styles.monthRow}>
-          <Pressable onPress={() => shiftMonth(-1)} style={styles.arrow} accessibilityLabel="Previous month">
-            <Text style={styles.arrowText}>‹</Text>
-          </Pressable>
-          <Text style={styles.monthLabel}>
-            {MONTH_NAMES[month]} {year}
-          </Text>
-          <Pressable onPress={() => shiftMonth(1)} style={styles.arrow} accessibilityLabel="Next month">
-            <Text style={styles.arrowText}>›</Text>
-          </Pressable>
-        </View>
+        <Text style={styles.rangeLabel}>This week & next</Text>
 
-        <CalendarGrid year={year} month={month} onSelectDay={openDay} />
+        <CalendarGrid onSelectDay={openDay} />
 
         <View style={styles.legend}>
           <View style={styles.legendDot} />
           <Text style={styles.legendText}>Days with deals · tap any day to dig in</Text>
         </View>
-      </ScrollView>
+      </View>
 
       <ZipModal
         visible={zipModal}
@@ -88,7 +70,7 @@ export default function CalendarHome() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.paper },
-  content: { padding: spacing.xl, paddingBottom: spacing.xxxl },
+  content: { flex: 1, padding: spacing.xl, paddingBottom: spacing.lg },
   topRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.lg },
   hello: { fontFamily: fonts.display, fontSize: 28, color: colors.ink },
   tagline: { fontFamily: fonts.body, fontSize: 15, color: colors.inkSoft, marginTop: 2 },
@@ -108,7 +90,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.pill,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
   },
   zipPin: { fontSize: 16, marginRight: spacing.sm },
   zipText: { flex: 1, fontFamily: fonts.bodyBold, fontSize: 15, color: colors.ink },
@@ -119,23 +101,18 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  monthRow: {
+  rangeLabel: {
+    fontFamily: fonts.display,
+    fontSize: 20,
+    color: colors.ink,
+    marginBottom: spacing.sm,
+  },
+  legend: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
-  },
-  arrow: {
-    width: 40,
-    height: 40,
-    borderRadius: radii.pill,
-    backgroundColor: colors.paperDeep,
-    alignItems: 'center',
+    marginTop: spacing.md,
     justifyContent: 'center',
   },
-  arrowText: { fontFamily: fonts.display, fontSize: 24, color: colors.ink, marginTop: -2 },
-  monthLabel: { fontFamily: fonts.display, fontSize: 22, color: colors.ink },
-  legend: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.lg, justifyContent: 'center' },
   legendDot: {
     width: 8,
     height: 8,

@@ -25,27 +25,17 @@ export const MONTH_NAMES = [
   'December',
 ];
 
-export interface CalendarCell {
-  date: Date;
-  inMonth: boolean;
-}
-
-/** A 6-row (42-cell) grid covering `month`, padded with adjacent days. */
-export function buildMonthGrid(year: number, month: number): CalendarCell[] {
-  const first = new Date(year, month, 1);
-  const startOffset = first.getDay(); // days of prev month to show
-  const gridStart = new Date(year, month, 1 - startOffset);
-
-  const cells: CalendarCell[] = [];
-  for (let i = 0; i < 42; i++) {
-    const date = new Date(
-      gridStart.getFullYear(),
-      gridStart.getMonth(),
-      gridStart.getDate() + i,
-    );
-    cells.push({ date, inMonth: date.getMonth() === month });
+/**
+ * 14 dates covering the current week + next week, starting at the Sunday of
+ * the week that contains `from`. No previous days are included.
+ */
+export function buildTwoWeekGrid(from: Date): Date[] {
+  const start = new Date(from.getFullYear(), from.getMonth(), from.getDate() - from.getDay());
+  const days: Date[] = [];
+  for (let i = 0; i < 14; i++) {
+    days.push(new Date(start.getFullYear(), start.getMonth(), start.getDate() + i));
   }
-  return cells;
+  return days;
 }
 
 export function isSameDay(a: Date, b: Date): boolean {

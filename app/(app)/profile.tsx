@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { ZipModal } from '../../components/ZipModal';
@@ -15,6 +16,21 @@ import { colors, fonts, radii, shadow, spacing } from '../../theme/theme';
 export default function Profile() {
   const { user, updateZip, logOut } = useAuth();
   const [zipModal, setZipModal] = useState(false);
+  // Local only — the chosen photo is kept in memory for this session. No
+  // backend/persistence yet; it resets when the app restarts.
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
+
+  const pickPhoto = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setPhotoUri(result.assets[0].uri);
+    }
+  };
 
   const handleLogout = () => {
     logOut();
@@ -33,11 +49,25 @@ export default function Profile() {
 
       <ScrollView contentContainerStyle={styles.content}>
         <View style={[styles.identity, shadow.soft]}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {user?.displayName?.[0]?.toUpperCase() ?? '🙂'}
-            </Text>
-          </View>
+          <Pressable
+            onPress={pickPhoto}
+            style={styles.avatarPress}
+            accessibilityRole="button"
+            accessibilityLabel="Change profile photo"
+          >
+            <View style={styles.avatar}>
+              {photoUri ? (
+                <Image source={{ uri: photoUri }} style={styles.avatarImage} />
+              ) : (
+                <Text style={styles.avatarText}>
+                  {user?.displayName?.[0]?.toUpperCase() ?? '🙂'}
+                </Text>
+              )}
+            </View>
+            <View style={styles.cameraBadge}>
+              <Text style={styles.cameraIcon}>📷</Text>
+            </View>
+          </Pressable>
           <Text style={styles.name}>{user?.displayName}</Text>
           <Text style={styles.email}>{user?.email}</Text>
         </View>
@@ -113,6 +143,7 @@ const styles = StyleSheet.create({
     padding: spacing.xxl,
     marginBottom: spacing.xl,
   },
+  avatarPress: { marginBottom: spacing.md },
   avatar: {
     width: 72,
     height: 72,
@@ -120,8 +151,23 @@ const styles = StyleSheet.create({
     backgroundColor: colors.tomato,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.md,
+    overflow: 'hidden',
   },
+  avatarImage: { width: 72, height: 72 },
+  cameraBadge: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 30,
+    height: 30,
+    borderRadius: radii.pill,
+    backgroundColor: colors.mustard,
+    borderWidth: 3,
+    borderColor: colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cameraIcon: { fontSize: 13 },
   avatarText: { fontFamily: fonts.display, fontSize: 32, color: '#FFFFFF' },
   name: { fontFamily: fonts.display, fontSize: 24, color: colors.ink },
   email: { fontFamily: fonts.bodySemi, fontSize: 14, color: colors.inkSoft, marginTop: 2 },
