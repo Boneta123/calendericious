@@ -4,8 +4,10 @@ import { useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PrimaryButton } from '../../components/PrimaryButton';
+import { RestaurantPickerModal } from '../../components/RestaurantPickerModal';
 import { ZipModal } from '../../components/ZipModal';
 import { useAuth } from '../../context/AuthContext';
+import { useRestaurantSelection } from '../../context/RestaurantSelectionContext';
 import { colors, fonts, radii, shadow, spacing } from '../../theme/theme';
 
 /**
@@ -15,7 +17,9 @@ import { colors, fonts, radii, shadow, spacing } from '../../theme/theme';
  */
 export default function Profile() {
   const { user, updateZip, logOut } = useAuth();
+  const { count: restaurantCount } = useRestaurantSelection();
   const [zipModal, setZipModal] = useState(false);
+  const [restaurantModal, setRestaurantModal] = useState(false);
   // Local only — the chosen photo is kept in memory for this session. No
   // backend/persistence yet; it resets when the app restarts.
   const [photoUri, setPhotoUri] = useState<string | null>(null);
@@ -82,6 +86,22 @@ export default function Profile() {
           <Text style={styles.rowAction}>Change</Text>
         </Pressable>
 
+        <Text style={styles.sectionLabel}>Your restaurants</Text>
+        <Pressable onPress={() => setRestaurantModal(true)} style={[styles.row, shadow.soft]}>
+          <View style={styles.countMark}>
+            <Text style={styles.countMarkText}>{restaurantCount}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.rowTitle}>Choose your restaurants</Text>
+            <Text style={styles.rowSub}>
+              {restaurantCount === 0
+                ? 'Pick the spots you want deals from'
+                : `${restaurantCount} selected`}
+            </Text>
+          </View>
+          <Text style={styles.rowAction}>Edit</Text>
+        </Pressable>
+
         <Text style={styles.sectionLabel}>Coming soon</Text>
         {/* TODO: backend — these rows are placeholders until the API exists. */}
         <PlaceholderRow icon="🔔" title="Deal notifications" />
@@ -101,6 +121,11 @@ export default function Profile() {
         currentZip={user?.zip ?? ''}
         onClose={() => setZipModal(false)}
         onSave={updateZip}
+      />
+
+      <RestaurantPickerModal
+        visible={restaurantModal}
+        onClose={() => setRestaurantModal(false)}
       />
     </SafeAreaView>
   );
@@ -191,6 +216,15 @@ const styles = StyleSheet.create({
   },
   rowDisabled: { opacity: 0.6 },
   rowIcon: { fontSize: 20 },
+  countMark: {
+    width: 34,
+    height: 34,
+    borderRadius: radii.sm,
+    backgroundColor: colors.tomato,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  countMarkText: { fontFamily: fonts.display, fontSize: 16, color: '#FFFFFF' },
   rowTitle: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.ink },
   rowSub: { fontFamily: fonts.bodySemi, fontSize: 13, color: colors.inkSoft, marginTop: 1 },
   rowAction: {

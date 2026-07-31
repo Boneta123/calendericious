@@ -19,6 +19,7 @@ import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from '../context/AuthContext';
+import { RestaurantSelectionProvider } from '../context/RestaurantSelectionContext';
 import { colors } from '../theme/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -44,14 +45,16 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AuthProvider>
-          <StatusBar style="dark" />
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              contentStyle: { backgroundColor: colors.paper },
-              animation: 'slide_from_right',
-            }}
-          />
+          <RestaurantSelectionProvider>
+            <StatusBar style="dark" />
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                contentStyle: { backgroundColor: colors.paper },
+                animation: 'slide_from_right',
+              }}
+            />
+          </RestaurantSelectionProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

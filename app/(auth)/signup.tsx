@@ -11,8 +11,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BrandLogo } from '../../components/BrandLogo';
 import { PrimaryButton } from '../../components/PrimaryButton';
+import { RestaurantPickerModal } from '../../components/RestaurantPickerModal';
 import { TextField } from '../../components/TextField';
 import { useAuth } from '../../context/AuthContext';
+import { pickRandom } from '../../data/restaurants';
 import { colors, fonts, spacing } from '../../theme/theme';
 import { isValidUsZip, sanitizeZipInput } from '../../utils/zip';
 
@@ -23,6 +25,9 @@ export default function SignUp() {
   const [password, setPassword] = useState('');
   const [zip, setZip] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // After the account is created, gate entry behind picking ≥1 restaurant.
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [recommendations] = useState(() => pickRandom(3));
 
   const handleSubmit = () => {
     const next: Record<string, string> = {};
@@ -33,8 +38,9 @@ export default function SignUp() {
     setErrors(next);
     if (Object.keys(next).length > 0) return;
 
+    // Account created; show the required restaurant onboarding before entering.
     signUp({ email, password, displayName: displayName.trim(), zip });
-    router.replace('/(app)');
+    setShowOnboarding(true);
   };
 
   return (
@@ -100,6 +106,16 @@ export default function SignUp() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <RestaurantPickerModal
+        visible={showOnboarding}
+        mode="onboarding"
+        recommended={recommendations}
+        onContinue={() => {
+          setShowOnboarding(false);
+          router.replace('/(app)');
+        }}
+      />
     </SafeAreaView>
   );
 }
