@@ -42,3 +42,6 @@ yarn-error.*
 
 #Secrets
 .env
+
+# Personal project notes (private, do not commit)
+mboneta.md

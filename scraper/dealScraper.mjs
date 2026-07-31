@@ -124,8 +124,12 @@ const SITES = [
 // Matches: happy hour, special(s), deal, daily, weekly, today, tonight,
 // BOGO, discount, promo, "% off", a "$<digit>" price, any weekday
 // abbreviation, and a clock time like "5pm" or "10:30 am".
+// Broadened for MAXIMUM recall — we want every kind of deal, not just
+// day/time-specific ones: free/BOGO, kids-eat-free, limited-time offers,
+// national food days, holiday/seasonal specials, combos/value, coupons,
+// and app/rewards-exclusive offers, plus the original day/time/price signals.
 const DEAL_SIGNAL =
-  /happy hour|special(s)?|deal|daily|weekly|today|tonight|BOGO|discount|promo|%\s?off|\$\d|\b(mon|tue|wed|thu|fri|sat|sun)\b|\b\d{1,2}(:\d{2})?\s?(am|pm)\b/i;
+  /happy hour|special|free|bogo|buy one|buy 1|kids eat free|deal|daily|weekly|weekday|weekend|today|tonight|limited[- ]?time|for a limited|new |combo|bundle|value|meal deal|coupon|promo|offer|discount|save|%\s?off|\$\s?\d|\d+\s?(cents|¢)|national|holiday|celebrate|anniversary|seasonal|reward|points|member|app[- ]?only|app exclusive|mobile order|order online|\b(mon|tue|wed|thu|fri|sat|sun)\b|\b\d{1,2}(:\d{2})?\s?(am|pm)\b/i;
 
 // ===========================================================================
 // STAGE 1 — THE SCRAPER
@@ -212,6 +216,8 @@ async function scrapeOne(browser, url) {
           'span', 'strong', 'b', 'em', 'mark',
           'time',
           'button', 'a',
+          // Broadened: captions/labels/definition lists often hold deal copy.
+          'label', 'small', 'figcaption', 'dd', 'dt',
         ];
 
         // STRIP — never send downstream (pure token waste / noise). We refuse
@@ -234,6 +240,19 @@ async function scrapeOne(browser, url) {
             if (STRIP.includes(tag)) return true;
             const bucket = `${n.id || ''} ${n.className || ''} ${n.getAttribute?.('aria-label') || ''}`;
             if (NOISE_HINT.test(bucket)) return true;
+          }
+          return false;
+        }
+
+        // Is `el` inside a container whose id/class/aria marks it a deal area?
+        // Deal blocks often list plain lines ("2 for $5") under a "Deals" /
+        // "Offers" / "Rewards" section — we keep those even without keywords.
+        const DEAL_SECTION =
+          /deal|offer|promo|special|reward|coupon|value|limited|feature|menu-?deal/i;
+        function inDealSection(el) {
+          for (let n = el.parentElement; n; n = n.parentElement) {
+            const bucket = `${n.id || ''} ${n.className || ''} ${n.getAttribute?.('aria-label') || ''}`;
+            if (DEAL_SECTION.test(bucket)) return true;
           }
           return false;
         }
@@ -286,10 +305,13 @@ async function scrapeOne(browser, url) {
           const keep =
             signal.test(haystack) ||
             signal.test(nearestHeadingText(el)) ||
+            // Broadened: keep anything sitting inside a deals/offers/rewards
+            // section, even if the individual line has no keyword.
+            (text && inDealSection(el)) ||
             // Always keep links/buttons whose text hints at specials/menus so
             // Stage 1's one-hop follower can find deal subpages/PDFs.
             ((tag === 'a' || tag === 'button') &&
-              /special|deal|menu|happy|offer/i.test(`${text} ${href || ''}`));
+              /special|deal|menu|happy|offer|reward|promo|coupon/i.test(`${text} ${href || ''}`));
           if (!keep) continue;
 
           // One field per node (contract rule 2): {tag, text, href?, alt?}.
@@ -425,11 +447,11 @@ const DEAL_SHAPE_DOC = `{
   "restaurant": string,
   "dealName": string,          // main deal name, e.g. "3 for Me"
   "description": string,
-  "daysOfWeek": string[],      // e.g. ["Mon","Tue"] or ["Daily"]
-  "startTime": string | null,  // time of day, e.g. "15:00" or "3pm"
+  "category": string,          // one of: day-time | national-day | limited-time | bogo | kids | value-combo | app-rewards | other
+  "daysOfWeek": string[],      // e.g. ["Mon","Tue"] or ["Daily"]; [] if not day-based
+  "startTime": string | null,  // time of day, e.g. "15:00" or "3pm"; null if none
   "endTime": string | null,
   "requiresRewards": boolean,  // loyalty/rewards membership required?
-  "location": string | null,   // address/branch/city if present
   "sourceUrl": string
 }`;
 
@@ -470,22 +492,29 @@ export async function scanForDeals(scrapedResults) {
       continue;
     }
 
-    // The instruction is strict and grounded to prevent hallucinated deals.
+    // Broadened for MAX recall: extract EVERY customer-facing deal/offer,
+    // not just day/time ones — but stay strictly grounded to prevent
+    // hallucinated deals.
     const system =
-      'You extract ONLY day-specific or time-specific restaurant deals ' +
-      '(happy hours, weekday specials like "Taco Tuesday", limited-time offers) ' +
-      'from pre-scraped webpage text. Use ONLY the provided nodes. If the text ' +
-      'does not clearly state a deal, do NOT include it. Never invent names, ' +
-      'days, times, prices, or locations. Return strict JSON only.';
+      'You extract EVERY customer-facing restaurant deal, offer, or promotion ' +
+      'from pre-scraped webpage text: recurring day/time specials (happy hour, ' +
+      '"Taco Tuesday"), national food days (e.g. "National Cheeseburger Day"), ' +
+      'holiday/seasonal limited-time offers, BOGO / buy-one-get-one, kids-eat-free, ' +
+      'combos & value meals, coupons, and app/rewards-exclusive offers. Be thorough ' +
+      '— capture any deal a customer could act on. Use ONLY the provided nodes; if ' +
+      'the text does not clearly state a deal, do NOT include it. Never invent names, ' +
+      'days, times, prices, calendar dates, or locations. Return strict JSON only.';
 
     const user =
       `Restaurant page URL: ${site.url}\n\n` +
       `Return JSON of the form { "deals": Deal[] } where each Deal is:\n${DEAL_SHAPE_DOC}\n\n` +
       `Rules:\n` +
-      `- Include a deal ONLY if it is tied to specific day(s) and/or time(s).\n` +
+      `- Include EVERY distinct deal/offer/promotion stated in the text — do not limit to day/time deals.\n` +
+      `- category MUST be one of: day-time, national-day, limited-time, bogo, kids, value-combo, app-rewards, other.\n` +
       `- dealName is the offer's MAIN name (e.g. "3 for Me"); if unnamed, use a short label from the text.\n` +
-      `- requiresRewards is true ONLY if a loyalty/rewards membership is explicitly required.\n` +
-      `- Set startTime/endTime/location to null if not stated. Never guess.\n` +
+      `- daysOfWeek is [] and startTime/endTime null when the deal is not tied to specific days/times (that's fine).\n` +
+      `- requiresRewards is true ONLY if a loyalty/rewards membership or the app is explicitly required.\n` +
+      `- Set any field to null / [] if not stated. Never guess a national day's calendar date.\n` +
       `- sourceUrl is the page URL above.\n\n` +
       `Scraped nodes (JSON):\n${JSON.stringify(site.nodes)}`;
 
