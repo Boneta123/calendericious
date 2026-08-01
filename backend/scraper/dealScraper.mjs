@@ -30,6 +30,7 @@
 // plugin masks the many headless-Chromium fingerprints (navigator.webdriver,
 // missing plugins, permissions quirks, etc.) that bot filters key on — this
 // is what gets us past the hardened big-chain CDNs that block plain headless.
+import { readFileSync } from 'node:fs';
 import { chromium } from 'playwright-extra';
 import stealth from 'puppeteer-extra-plugin-stealth';
 import OpenAI from 'openai';
@@ -57,61 +58,13 @@ const RATE_LIMIT_MS = 1500;
 // Hard cap on how long we wait for a single page before giving up.
 const PAGE_TIMEOUT_MS = 30000;
 
-// The list of restaurant sites to check. YOU paste URLs here — leave blank
-// and the pipeline simply does nothing.
-const SITES = [
-  "https://www.wendys.com",
-  "https://www.chipotle.com",
-  "https://www.papajohns.com",
-  "https://www.subway.com",
-  "https://www.jerseymikes.com",
-  "https://www.chick-fil-a.com",
-  "https://www.buffalowildwings.com",
-  "https://www.arbys.com",
-  "https://www.sonicdrivein.com",
-  "https://www.carlsjr.com",
-  "https://www.hardees.com",
-  "https://www.deltaco.com",
-  "https://www.qdoba.com",
-  "https://www.pandaexpress.com",
-  "https://www.dunkindonuts.com",
-  "https://www.starbucks.com",
-  "https://www.fiveguys.com",
-  "https://www.chilis.com",
-  "https://www.applebees.com",
-  "https://www.olivegarden.com",
-  "https://www.dennys.com",
-  "https://www.ihop.com",
-  "https://www.outback.com",
-  "https://www.pizzahut.com",
-  "https://www.bk.com",
-  "https://www.dominos.com",
-  "https://littlecaesars.com",
-  "https://www.jimmyjohns.com",
-  "https://www.firehousesubs.com",
-  "https://www.kfc.com",
-  "https://www.zaxbys.com",
-  "https://www.wingstop.com",
-  "https://www.jackinthebox.com",
-  "https://www.moes.com",
-  "https://www.panerabread.com",
-  "https://www.dairyqueen.com",
-  "https://www.culvers.com",
-  "https://www.raisingcanes.com",
-  "https://www.shakeshack.com",
-  "https://www.krispykreme.com",
-  "https://www.texasroadhouse.com",
-  "https://www.longhornsteakhouse.com",
-  "https://www.crackerbarrel.com",
-  "https://www.redrobin.com",
-  "https://www.elpolloloco.com",
-  "https://www.bojangles.com",
-  "https://www.steaknshake.com",
-  "https://www.noodles.com",
-  "https://whataburger.com",
-  "https://www.mcdonalds.com",
-  "https://www.tacobell.com"
-]; // <-- I will paste restaurant URLs here
+// Single source of truth: the restaurant list lives in shared/restaurants.json
+// (repo root) and is ALSO read by the frontend (frontend/data/restaurants.ts).
+// Edit that JSON to change the scraper targets and the app options at once.
+const RESTAURANTS = JSON.parse(
+  readFileSync(new URL('../../shared/restaurants.json', import.meta.url), 'utf8'),
+);
+const SITES = RESTAURANTS.map((r) => r.url);
 
 // ===========================================================================
 // DEAL-SIGNAL PRE-FILTER

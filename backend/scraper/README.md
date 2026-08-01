@@ -23,11 +23,11 @@ OPENAI_API_KEY=sk-...
 
 ## Run
 
-1. Open `scraper/dealScraper.mjs` and paste restaurant URLs into the `SITES` array.
+1. Open `backend/scraper/dealScraper.mjs` and paste restaurant URLs into the `SITES` array.
 2. Run:
 
 ```bash
-node --env-file=.env scraper/dealScraper.mjs
+node --env-file=.env backend/scraper/dealScraper.mjs
 ```
 
 Deals print to the console per site. Change `OPENAI_MODEL` at the top of the
