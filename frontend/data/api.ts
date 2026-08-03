@@ -63,7 +63,8 @@ export interface ApiDeal {
   daysOfWeek: number[];
   startTime: string | null; // "HH:MM"
   endTime: string | null; // "HH:MM"
-  validThrough: string | null; // ISO date
+  validFrom: string | null; // ISO date — start of a dated/limited promo
+  validThrough: string | null; // ISO date — end of a dated/limited promo
   requiresRewards: boolean;
   sourceUrl: string | null;
   createdAt: string;
@@ -78,4 +79,35 @@ export async function fetchDeals(): Promise<ApiDeal[]> {
     throw new Error(`fetchDeals failed: ${res.status} ${res.statusText}`);
   }
   return (await res.json()) as ApiDeal[];
+}
+
+/** Strip a Date/ISO string to local midnight (calendar-day comparison, no TZ drift). */
+function dayOnly(value: Date | string): Date {
+  const d = typeof value === 'string' ? new Date(value) : value;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+/**
+ * Whether a deal should appear on a given calendar date — the SINGLE source of
+ * truth for both the calendar dots and the day-detail list. Compares by
+ * calendar day only. Rules:
+ *   - never in the past (today/future only)
+ *   - never before validFrom, never after validThrough (a 9/16–9/20 run shows
+ *     ONLY 9/16–9/20 — no days before it starts)
+ *   - if daysOfWeek is set, the date's weekday must match (within any window)
+ *   - empty daysOfWeek: DAY → never; TIME → daily; LIMITED_TIME → only when it
+ *     actually has a date window (so it can't flood every day)
+ */
+export function dealShowsOnDate(deal: ApiDeal, date: Date): boolean {
+  const d = dayOnly(date);
+  const today = dayOnly(new Date());
+  if (d < today) return false;
+  if (deal.validFrom && d < dayOnly(deal.validFrom)) return false;
+  if (deal.validThrough && d > dayOnly(deal.validThrough)) return false;
+
+  if (deal.daysOfWeek.length > 0) return deal.daysOfWeek.includes(d.getDay());
+
+  if (deal.category === 'DAY') return false;
+  if (deal.category === 'TIME') return true;
+  return Boolean(deal.validFrom || deal.validThrough); // LIMITED_TIME needs a window
 }

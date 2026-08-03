@@ -36,10 +36,11 @@ function mapDays(daysOfWeek) {
   return [...out].sort((a, b) => a - b);
 }
 
-/** "8/2" or "8/2/2026" -> Date (current year if year omitted); null if unparseable. */
-function mapValidThrough(validThrough) {
-  if (!validThrough || typeof validThrough !== 'string') return null;
-  const m = validThrough.trim().match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
+/** "8/2" or "8/2/2026" -> Date (current year if year omitted); null if unparseable.
+ *  Used for both validFrom (start) and validThrough (end). */
+function parseDate(value) {
+  if (!value || typeof value !== 'string') return null;
+  const m = value.trim().match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
   if (!m) return null;
   const month = Number(m[1]);
   const day = Number(m[2]);
@@ -58,6 +59,40 @@ function orNull(value) {
 }
 
 /**
+ * Normalize a time to 24-hour "HH:MM" so the app renders it correctly.
+ * Accepts "15:00", "3pm", "3 PM", "3:30pm", "11am". Null if unparseable —
+ * defensive so a stray value never breaks the window display.
+ */
+function toHHMM(value) {
+  if (typeof value !== 'string') return null;
+  const s = value.trim().toLowerCase();
+  if (!s) return null;
+
+  // Already 24-hour "H:MM" / "HH:MM".
+  let m = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (m) {
+    const h = Number(m[1]);
+    const min = Number(m[2]);
+    if (h > 23 || min > 59) return null;
+    return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+  }
+
+  // 12-hour with am/pm: "3pm", "3 pm", "3:30pm", "11am".
+  m = s.match(/^(\d{1,2})(?::(\d{2}))?\s*([ap])m?\.?$/);
+  if (m) {
+    let h = Number(m[1]);
+    const min = m[2] ? Number(m[2]) : 0;
+    const pm = m[3] === 'p';
+    if (h < 1 || h > 12 || min > 59) return null;
+    if (pm && h !== 12) h += 12;
+    if (!pm && h === 12) h = 0;
+    return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+  }
+
+  return null; // bare hour or free text — ambiguous, leave unset
+}
+
+/**
  * @returns Prisma Deal create input, or null if the deal can't be mapped.
  */
 export function mapDeal(raw, restaurantId) {
@@ -71,9 +106,10 @@ export function mapDeal(raw, restaurantId) {
     description: orNull(raw.description) || '',
     category,
     daysOfWeek: mapDays(raw.daysOfWeek),
-    startTime: orNull(raw.startTime),
-    endTime: orNull(raw.endTime),
-    validThrough: mapValidThrough(raw.validThrough),
+    startTime: toHHMM(raw.startTime),
+    endTime: toHHMM(raw.endTime),
+    validFrom: parseDate(raw.validFrom),
+    validThrough: parseDate(raw.validThrough),
     requiresRewards: Boolean(raw.requiresRewards),
     sourceUrl: orNull(raw.sourceUrl),
   };

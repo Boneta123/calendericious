@@ -87,6 +87,7 @@ model Deal {
   startTime String? // "HH:MM" 24h; null = all-day / day-specific
   endTime   String? // "HH:MM" 24h; null = none
 
+  validFrom      DateTime? // start date for dated/limited promos (e.g. 9/16 of a 9/16–9/20 run); null otherwise
   validThrough   DateTime? // end date for limited-time promos; null otherwise
   requiresRewards Boolean  @default(false) // loyalty/rewards/app membership required
   sourceUrl      String? // page the deal was scraped from (traceability)

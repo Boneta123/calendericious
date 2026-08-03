@@ -3,18 +3,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Coupon } from '../../../components/Coupon';
-import { ApiDeal, fetchDeals } from '../../../data/api';
+import { ApiDeal, dealShowsOnDate, fetchDeals } from '../../../data/api';
 import { colors, fonts, radii, spacing } from '../../../theme/theme';
 import { formatLongDate, fromDateKey, MONTH_NAMES, WEEKDAY_FULL } from '../../../utils/date';
-
-/** A deal shows on `date` if it recurs that weekday (or applies any day) and,
- *  when dated, hasn't expired. Deals are not location-filtered. */
-function dealShowsOnDate(deal: ApiDeal, date: Date): boolean {
-  const onDay = deal.daysOfWeek.length === 0 || deal.daysOfWeek.includes(date.getDay());
-  if (!onDay) return false;
-  if (deal.validThrough && date > new Date(deal.validThrough)) return false;
-  return true;
-}
 
 export default function DayDetail() {
   const { date: dateKey } = useLocalSearchParams<{ date: string }>();

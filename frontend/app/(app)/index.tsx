@@ -8,7 +8,7 @@ import { FoodScatter } from '../../components/FoodScatter';
 import { ZipModal } from '../../components/ZipModal';
 import { useAuth } from '../../context/AuthContext';
 import { colors, fonts, radii, shadow, spacing } from '../../theme/theme';
-import { MONTH_NAMES, toDateKey } from '../../utils/date';
+import { toDateKey } from '../../utils/date';
 
 export default function CalendarHome() {
   const { user, updateZip } = useAuth();
@@ -47,10 +47,6 @@ export default function CalendarHome() {
           <Text style={styles.zipText}>Deals near {user?.zip}</Text>
           <Text style={styles.zipChange}>Change</Text>
         </Pressable>
-
-        <Text style={styles.rangeLabel}>
-          {MONTH_NAMES[new Date().getMonth()]} {new Date().getFullYear()}
-        </Text>
 
         <CalendarGrid onSelectDay={openDay} />
 

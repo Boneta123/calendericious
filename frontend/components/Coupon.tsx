@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { ApiDeal } from '../data/api';
 import { colors, fonts, radii, shadow, spacing } from '../theme/theme';
 import { Badge } from './Badge';
@@ -37,6 +37,17 @@ export function Coupon({ item }: { item: ApiDeal }) {
           <Badge label={allDay ? 'All day' : 'Timed deal'} tone={allDay ? 'basil' : 'mustard'} />
           {item.requiresRewards && <Badge label="★ Rewards required" tone="grape" />}
         </View>
+
+        {item.sourceUrl && (
+          <Pressable
+            onPress={() => Linking.openURL(item.sourceUrl!)}
+            style={styles.sourceLink}
+            accessibilityRole="link"
+            accessibilityLabel={`View this deal on ${restaurant.name}'s website`}
+          >
+            <Text style={styles.sourceText}>View source ↗</Text>
+          </Pressable>
+        )}
       </View>
 
       {/* Perforation: dashed line with two paper-colored notches */}
@@ -93,6 +104,13 @@ const styles = StyleSheet.create({
     lineHeight: 21,
   },
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.lg },
+  sourceLink: { marginTop: spacing.md, alignSelf: 'flex-start' },
+  sourceText: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 13,
+    color: colors.grape,
+    textDecorationLine: 'underline',
+  },
 
   perforation: { height: NOTCH, justifyContent: 'center' },
   dashes: {
