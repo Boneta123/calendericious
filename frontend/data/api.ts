@@ -2,14 +2,48 @@
  * Backend API client (deals). Replaces the old local mock data — the calendar
  * and day-detail screens now read live deals from the Express/Prisma backend.
  *
- * NOTE: the base URL differs by run target:
- *   - iOS simulator .......... http://localhost:4000
- *   - Android emulator ....... http://10.0.2.2:4000
- *   - Physical phone (Expo Go) http://<your-Mac-LAN-IP>:4000
- * Change API_BASE for your target. Deals are empty until the backend has been
- * refreshed (`npm run server` + `npm run refresh`).
+ * The base URL is resolved automatically so it works everywhere WITHOUT edits:
+ *   - Physical phone (Expo Go) / Android emulator / iOS simulator → uses the
+ *     same host the Expo dev server is served from (your Mac's LAN IP), so the
+ *     phone reaches your machine on the LAN.
+ *   - Set EXPO_PUBLIC_API_URL to override (e.g. a deployed backend).
+ *
+ * The backend must be reachable on port API_PORT from the device (same Wi-Fi;
+ * allow incoming connections if macOS firewall prompts). Deals are empty until
+ * the backend is refreshed (`npm run server` + `npm run refresh`).
  */
-export const API_BASE = 'http://localhost:4000';
+import Constants from 'expo-constants';
+
+const API_PORT = 4000;
+
+/** Derive the dev machine's host (LAN IP) from whatever Expo exposes. */
+function devHost(): string | null {
+  const c = Constants as unknown as {
+    expoConfig?: { hostUri?: string };
+    expoGoConfig?: { debuggerHost?: string };
+    manifest2?: { extra?: { expoGo?: { debuggerHost?: string } } };
+    manifest?: { debuggerHost?: string; hostUri?: string };
+  };
+  const hostUri =
+    c.expoConfig?.hostUri ||
+    c.expoGoConfig?.debuggerHost ||
+    c.manifest2?.extra?.expoGo?.debuggerHost ||
+    c.manifest?.debuggerHost ||
+    c.manifest?.hostUri ||
+    '';
+  // hostUri looks like "192.168.1.23:8081" — keep just the host.
+  const host = hostUri.split('://').pop()?.split(':')[0] ?? '';
+  return host && host !== 'localhost' ? host : null;
+}
+
+function resolveApiBase(): string {
+  const override = process.env.EXPO_PUBLIC_API_URL;
+  if (override) return override.replace(/\/+$/, '');
+  const host = devHost();
+  return `http://${host ?? 'localhost'}:${API_PORT}`;
+}
+
+export const API_BASE = resolveApiBase();
 
 /** The restaurant shape joined into each deal by GET /api/deals. */
 export interface ApiDealRestaurant {

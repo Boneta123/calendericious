@@ -8,6 +8,8 @@
  * Env:  PORT (default 4000), OPENAI_API_KEY (used by the daily deals job)
  */
 
+import { networkInterfaces } from 'node:os';
+
 import cors from 'cors';
 import express from 'express';
 
@@ -54,8 +56,21 @@ app.use((err, _req, res, _next) => {
 });
 
 // --- Start -----------------------------------------------------------------
-app.listen(PORT, () => {
+// First non-internal IPv4 — the address a phone on the same Wi-Fi uses.
+function lanAddress() {
+  for (const addrs of Object.values(networkInterfaces())) {
+    for (const a of addrs ?? []) {
+      if (a.family === 'IPv4' && !a.internal) return a.address;
+    }
+  }
+  return null;
+}
+
+// Bind all interfaces (0.0.0.0) so physical devices / Expo Go can reach it.
+app.listen(PORT, '0.0.0.0', () => {
+  const lan = lanAddress();
   console.log(`[server] Calendericious API listening on http://localhost:${PORT}`);
+  if (lan) console.log(`[server]   on your LAN (for phones/Expo Go): http://${lan}:${PORT}`);
   startDealsCron();
 });
 
