@@ -1,8 +1,9 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { ResolvedDeal } from '../data/types';
+import { ApiDeal } from '../data/api';
 import { colors, fonts, radii, shadow, spacing } from '../theme/theme';
 import { Badge } from './Badge';
+import { RestaurantLogo } from './RestaurantLogo';
 import { TimeWindowBar } from './TimeWindowBar';
 
 /**
@@ -10,34 +11,31 @@ import { TimeWindowBar } from './TimeWindowBar';
  * Brand-tinted top, a dashed perforation with notched edges, and a stub
  * that carries the time window + a Rewards badge when required.
  */
-export function Coupon({ item }: { item: ResolvedDeal }) {
-  const { deal, chain, branch } = item;
-  const allDay = deal.startTime === null;
+export function Coupon({ item }: { item: ApiDeal }) {
+  const { restaurant } = item;
+  const allDay = item.startTime === null;
 
   return (
     <View style={[styles.card, shadow.card]}>
-      {/* Brand accent stripe */}
-      <View style={[styles.stripe, { backgroundColor: chain.accent }]} />
+      {/* Brand accent stripe (the API has no per-brand color, so a theme accent). */}
+      <View style={[styles.stripe, { backgroundColor: colors.tomato }]} />
 
       <View style={styles.body}>
         <View style={styles.headerRow}>
-          <View style={[styles.emojiChip, { backgroundColor: chain.accent + '22' }]}>
-            <Text style={styles.emoji}>{chain.emoji}</Text>
+          <View style={styles.logoChip}>
+            <RestaurantLogo restaurant={restaurant} size={48} />
           </View>
           <View style={styles.headerText}>
-            <Text style={styles.chain}>{chain.name}</Text>
-            <Text style={styles.branch} numberOfLines={1}>
-              📍 {branch.name} · {branch.distanceMiles} mi
-            </Text>
+            <Text style={styles.chain}>{restaurant.name}</Text>
           </View>
         </View>
 
-        <Text style={styles.title}>{deal.title}</Text>
-        <Text style={styles.desc}>{deal.description}</Text>
+        <Text style={styles.title}>{item.title}</Text>
+        <Text style={styles.desc}>{item.description}</Text>
 
         <View style={styles.badgeRow}>
           <Badge label={allDay ? 'All day' : 'Timed deal'} tone={allDay ? 'basil' : 'mustard'} />
-          {deal.requiresRewards && <Badge label="★ Rewards required" tone="grape" />}
+          {item.requiresRewards && <Badge label="★ Rewards required" tone="grape" />}
         </View>
       </View>
 
@@ -50,7 +48,7 @@ export function Coupon({ item }: { item: ResolvedDeal }) {
 
       {/* Stub */}
       <View style={styles.stub}>
-        <TimeWindowBar startTime={deal.startTime} endTime={deal.endTime} />
+        <TimeWindowBar startTime={item.startTime} endTime={item.endTime} />
       </View>
     </View>
   );
@@ -72,15 +70,7 @@ const styles = StyleSheet.create({
   },
   body: { padding: spacing.xl, paddingBottom: spacing.lg },
   headerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.lg },
-  emojiChip: {
-    width: 48,
-    height: 48,
-    borderRadius: radii.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.md,
-  },
-  emoji: { fontSize: 26 },
+  logoChip: { marginRight: spacing.md },
   headerText: { flex: 1 },
   chain: {
     fontFamily: fonts.monoBold,
@@ -89,7 +79,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
-  branch: { fontFamily: fonts.bodySemi, fontSize: 13, color: colors.inkSoft, marginTop: 2 },
   title: {
     fontFamily: fonts.display,
     fontSize: 26,

@@ -1,21 +1,40 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Coupon } from '../../../components/Coupon';
-import { resolveDealsForDate } from '../../../data/mockData';
-import { useAuth } from '../../../context/AuthContext';
+import { ApiDeal, fetchDeals } from '../../../data/api';
 import { colors, fonts, radii, spacing } from '../../../theme/theme';
 import { formatLongDate, fromDateKey, MONTH_NAMES, WEEKDAY_FULL } from '../../../utils/date';
 
+/** A deal shows on `date` if it recurs that weekday (or applies any day) and,
+ *  when dated, hasn't expired. Deals are not location-filtered. */
+function dealShowsOnDate(deal: ApiDeal, date: Date): boolean {
+  const onDay = deal.daysOfWeek.length === 0 || deal.daysOfWeek.includes(date.getDay());
+  if (!onDay) return false;
+  if (deal.validThrough && date > new Date(deal.validThrough)) return false;
+  return true;
+}
+
 export default function DayDetail() {
   const { date: dateKey } = useLocalSearchParams<{ date: string }>();
-  const { user } = useAuth();
 
   const date = useMemo(() => fromDateKey(dateKey ?? ''), [dateKey]);
+  const [allDeals, setAllDeals] = useState<ApiDeal[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    fetchDeals()
+      .then((d) => active && setAllDeals(d))
+      .catch(() => active && setAllDeals([]));
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const deals = useMemo(
-    () => resolveDealsForDate(date, user?.zip ?? ''),
-    [date, user?.zip],
+    () => allDeals.filter((d) => dealShowsOnDate(d, date)),
+    [allDeals, date],
   );
 
   return (
@@ -39,19 +58,17 @@ export default function DayDetail() {
 
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.sectionLabel}>
-          🍴 {deals.length > 0 ? 'In time order' : 'Nothing cooking'} · near {user?.zip}
+          🍴 {deals.length > 0 ? 'In time order' : 'Nothing cooking'}
         </Text>
 
         {deals.length === 0 ? (
           <View style={styles.empty}>
             <Text style={styles.emptyEmoji}>🥡</Text>
             <Text style={styles.emptyTitle}>No deals on {formatLongDate(date)}</Text>
-            <Text style={styles.emptySub}>
-              Try another day, or change your ZIP to scout a different area.
-            </Text>
+            <Text style={styles.emptySub}>Try another day to scout more deals.</Text>
           </View>
         ) : (
-          deals.map((item) => <Coupon key={item.deal.id} item={item} />)
+          deals.map((item) => <Coupon key={item.id} item={item} />)
         )}
       </ScrollView>
     </SafeAreaView>

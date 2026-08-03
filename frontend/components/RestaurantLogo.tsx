@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
-import { Restaurant } from '../data/restaurants';
 import { colors, fonts, radii } from '../theme/theme';
+
+/** Minimal shape this component needs — satisfied by both the picker's
+ *  `Restaurant` and the API deal's joined `restaurant` ({ name, logoUrl }). */
+type LogoSource = { name: string; logoUrl: string };
 
 // Deterministic warm accent per restaurant so the letter fallback still looks
 // on-brand (no emoji). Picks from the app's palette by name hash.
@@ -21,7 +24,7 @@ export function RestaurantLogo({
   restaurant,
   size = 44,
 }: {
-  restaurant: Restaurant;
+  restaurant: LogoSource;
   size?: number;
 }) {
   const [failed, setFailed] = useState(false);

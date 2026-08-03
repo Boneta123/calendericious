@@ -1,27 +1,73 @@
 /**
- * Daily deals refresh. Runs the scraper every morning and (eventually) writes
- * the results to the database. For now there's nowhere to persist and no URL
- * source, so this is wired but a no-op beyond invoking the scraper safely.
+ * Daily deals refresh. Sources the restaurant URL list from the DB, runs the
+ * scraper, maps the raw deals, and persists them — replacing each restaurant's
+ * deals idempotently so a re-run never duplicates.
  */
 import cron from 'node-cron';
+
+import { prisma } from '../db.mjs';
 import { scrapeSites, scanForDeals } from '../scraper/dealScraper.mjs';
+import { mapDeal } from './mapDeal.mjs';
+
+/** Hostname without protocol (matches the seed's hostOf). */
+function hostOf(url) {
+  return String(url || '')
+    .replace(/^https?:\/\//, '')
+    .replace(/\/.*$/, '');
+}
 
 /**
  * Run one deals refresh. Safe to call manually. Guards on a missing API key so
- * it can never crash the server.
+ * it can never crash the server. Persists inside a per-restaurant transaction.
  */
 export async function runDealsRefresh() {
   if (!process.env.OPENAI_API_KEY) {
     console.warn('[dealsJob] OPENAI_API_KEY not set — skipping refresh.');
     return;
   }
+
+  // Source the URL list from the seeded Restaurant catalog.
+  const restaurants = await prisma.restaurant.findMany({
+    select: { id: true, url: true, host: true },
+  });
+  if (restaurants.length === 0) {
+    console.warn('[dealsJob] no restaurants seeded — run backend/prisma/seed.mjs first.');
+    return;
+  }
+
+  // Resolve a scraped site back to a restaurantId by exact url, then by host.
+  const byUrl = new Map(restaurants.map((r) => [r.url, r.id]));
+  const byHost = new Map(restaurants.map((r) => [r.host, r.id]));
+  const resolveId = (siteUrl) =>
+    byUrl.get(siteUrl) ?? byHost.get(hostOf(siteUrl)) ?? null;
+
   try {
-    // TODO: source the restaurant URL list from the DB. Empty for now.
-    const urls = [];
+    const urls = restaurants.map((r) => r.url);
     const scraped = await scrapeSites(urls);
-    const deals = await scanForDeals(scraped);
-    // TODO: persist `deals` when the DB exists.
-    console.log(`[dealsJob] refresh complete — ${deals.length} site(s) scanned.`);
+    const results = await scanForDeals(scraped);
+
+    let totalDeals = 0;
+    for (const site of results) {
+      const restaurantId = resolveId(site.url);
+      if (!restaurantId) {
+        console.warn(`[dealsJob] no restaurant match for ${site.url} — skipping.`);
+        continue;
+      }
+      const mapped = (site.deals || [])
+        .map((d) => mapDeal(d, restaurantId))
+        .filter(Boolean);
+
+      // Replace this restaurant's deals atomically (idempotent refresh).
+      await prisma.$transaction([
+        prisma.deal.deleteMany({ where: { restaurantId } }),
+        ...(mapped.length ? [prisma.deal.createMany({ data: mapped })] : []),
+      ]);
+      totalDeals += mapped.length;
+    }
+
+    console.log(
+      `[dealsJob] refresh complete — ${results.length} site(s) scanned, ${totalDeals} deal(s) stored.`,
+    );
   } catch (err) {
     console.error('[dealsJob] refresh failed:', err);
   }

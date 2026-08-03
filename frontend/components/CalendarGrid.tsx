@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { weekdaysWithDeals } from '../data/mockData';
+import { fetchDeals } from '../data/api';
 import { Weekday } from '../data/types';
 import { colors, fonts, radii, shadow, spacing } from '../theme/theme';
 import { buildMonthGrid, isSameDay, WEEKDAY_LABELS } from '../utils/date';
@@ -9,13 +9,35 @@ interface Props {
   onSelectDay: (date: Date) => void;
 }
 
-const DEAL_DAYS: Set<Weekday> = weekdaysWithDeals();
-
 /**
  * Current-month calendar. Shows the month that contains today, padded with
  * adjacent (muted) days. Rows flex to fill whatever height the parent gives.
  */
 export function CalendarGrid({ onSelectDay }: Props) {
+  // Weekdays (0=Sun..6=Sat) that have at least one deal — dotted on the grid.
+  const [dealDays, setDealDays] = useState<Set<Weekday>>(new Set());
+
+  useEffect(() => {
+    let active = true;
+    fetchDeals()
+      .then((deals) => {
+        if (!active) return;
+        const days = new Set<Weekday>();
+        for (const deal of deals) {
+          if (deal.daysOfWeek.length === 0) {
+            for (let d = 0; d <= 6; d++) days.add(d as Weekday);
+          } else {
+            for (const d of deal.daysOfWeek) days.add(d as Weekday);
+          }
+        }
+        setDealDays(days);
+      })
+      .catch(() => active && setDealDays(new Set()));
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const today = new Date();
   const month = today.getMonth();
   const days = buildMonthGrid(today.getFullYear(), month);
@@ -37,7 +59,7 @@ export function CalendarGrid({ onSelectDay }: Props) {
             {week.map((date, di) => {
               const inMonth = date.getMonth() === month;
               const isToday = isSameDay(date, today);
-              const hasDeals = inMonth && DEAL_DAYS.has(date.getDay() as Weekday);
+              const hasDeals = inMonth && dealDays.has(date.getDay() as Weekday);
               return (
                 <Pressable
                   key={di}
