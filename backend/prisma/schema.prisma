@@ -1,0 +1,101 @@
+// Calendericious — Prisma schema (PostgreSQL)
+//
+// Mirrors the frontend/scraper source of truth so the API layer maps 1:1:
+//   - User  <-> auth + profile (frontend AuthContext + profile screen)
+//   - Restaurant  <-> the catalog / "chains" (shared/restaurants.json,
+//     frontend/data/restaurants.ts, frontend Chain interface)
+//   - UserRestaurant  <-> a user's chosen restaurants (RestaurantSelectionContext)
+//   - Deal  <-> frontend/data/types.ts `Deal` + backend/scraper deal shape
+//
+// SECURITY: passwords are stored ONLY as a hash (`passwordHash`). Hashing
+// (bcrypt/argon2) MUST happen at the app layer — never persist plaintext.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // Prisma 7: the connection URL lives in ../../prisma.config.ts (repo root),
+  // which reads DATABASE_URL from the environment. Never hardcode a URL/secret.
+}
+
+/// Fixed deal buckets — matches the scraper's `category` (day | time | limited-time).
+enum DealCategory {
+  DAY
+  TIME
+  LIMITED_TIME
+}
+
+/// App user. Mirrors AuthContext (email, displayName, zip) + profile photo.
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  email        String   @unique
+  passwordHash String // hash only — never plaintext; hashed at the app layer
+  profilePhoto String? // URL/path to the image, not binary
+  zip          String // 5-digit US ZIP
+
+  restaurants UserRestaurant[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Restaurant catalog = the "chains". `id` is the frontend slug (e.g. "wendys").
+model Restaurant {
+  id      String  @id // slug from frontend/data/restaurants.ts slugOf()
+  name    String
+  url     String
+  host    String
+  logoUrl String
+  accent  String? // brand accent hex (frontend Chain.accent), optional
+
+  deals Deal[]
+  users UserRestaurant[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// A user's selected restaurants — explicit many-to-many join.
+model UserRestaurant {
+  userId       String
+  restaurantId String
+  selectedAt   DateTime @default(now())
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@id([userId, restaurantId])
+  @@index([userId])
+  @@index([restaurantId])
+}
+
+/// A deal. Schemed off frontend/data/types.ts `Deal`, extended with the
+/// scraper's fields so scraped deals persist without reshaping.
+model Deal {
+  id           String     @id @default(cuid())
+  restaurantId String // FK -> Restaurant (replaces frontend Deal.chainId)
+  title        String // frontend Deal.title == scraper dealName
+  description  String
+  category     DealCategory
+
+  /// Weekdays this deal recurs on, JS getDay() order (0 = Sun ... 6 = Sat).
+  daysOfWeek Int[]
+
+  startTime String? // "HH:MM" 24h; null = all-day / day-specific
+  endTime   String? // "HH:MM" 24h; null = none
+
+  validThrough   DateTime? // end date for limited-time promos; null otherwise
+  requiresRewards Boolean  @default(false) // loyalty/rewards/app membership required
+  sourceUrl      String? // page the deal was scraped from (traceability)
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([restaurantId])
+  @@index([category])
+}

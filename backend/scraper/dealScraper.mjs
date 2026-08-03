@@ -288,10 +288,23 @@ async function scrapeOne(browser, url) {
     );
 
     // -------- One-hop follow (contract rule 6) -----------------------------
-    // Find obvious in-site "specials/menu/deals" links and same-domain PDF
-    // menus, and scrape those ONE level deep. We do NOT crawl the whole site.
+    // Deal/coupon pages are the WHOLE POINT of the app — but big chains often
+    // DON'T link them with obvious homepage text (Domino's "50% off" lives at
+    // /deals and is never linked from the hero). So we do two things:
+    //   1) ALWAYS try a few common deal paths on the same domain, and
+    //   2) follow deal-labeled links BEFORE generic menu links.
+    // This is the single biggest recall win for the deals the app exists for.
     const origin = new URL(url).origin;
-    const followTargets = [];
+    const stripHash = (u) => u.split('#')[0];
+
+    // (1) Best-effort common deal pages. 404s/redirects fail gracefully.
+    const DEAL_PATHS = ['/deals', '/coupons', '/offers', '/specials', '/menu/deals', '/deals-and-coupons'];
+    const guessedDealPages = DEAL_PATHS.map((p) => origin + p);
+
+    // (2) Links the page exposed, split by how deal-relevant they are so real
+    // deal/coupon links win over menu links when we hit the follow cap.
+    const dealLinks = [];
+    const menuLinks = [];
     for (const n of nodes) {
       if (!n.href) continue;
       let abs;
@@ -300,13 +313,20 @@ async function scrapeOne(browser, url) {
       } catch {
         continue;
       }
-      const sameDomain = abs.startsWith(origin);
-      const looksRelevant = /special|deal|menu|happy|offer/i.test(abs) || abs.toLowerCase().endsWith('.pdf');
-      if (sameDomain && looksRelevant && abs !== url) followTargets.push(abs);
+      if (!abs.startsWith(origin) || stripHash(abs) === url) continue;
+      const hay = `${abs} ${n.text || ''}`;
+      if (/deal|coupon|offer|special|happy|promo|%\s?off|save/i.test(hay) || abs.toLowerCase().endsWith('.pdf')) {
+        dealLinks.push(abs);
+      } else if (/menu/i.test(abs)) {
+        menuLinks.push(abs);
+      }
     }
 
-    // Cap the fan-out so a page full of menu links can't explode the run.
-    const uniqueTargets = [...new Set(followTargets)].slice(0, 4);
+    // Priority: real deal links → guessed deal pages → a couple menu links.
+    const ordered = [...dealLinks, ...guessedDealPages, ...menuLinks]
+      .map(stripHash)
+      .filter((u) => u !== url);
+    const uniqueTargets = [...new Set(ordered)].slice(0, 6);
 
     return { url, nodes, followTargets: uniqueTargets };
   } catch (err) {
@@ -400,11 +420,12 @@ const DEAL_SHAPE_DOC = `{
   "restaurant": string,
   "dealName": string,          // main deal name, e.g. "3 for Me"
   "description": string,
-  "category": string,          // one of: day-time | national-day | limited-time | bogo | kids | value-combo | app-rewards | other
-  "daysOfWeek": string[],      // e.g. ["Mon","Tue"] or ["Daily"]; [] if not day-based
-  "startTime": string | null,  // time of day, e.g. "15:00" or "3pm"; null if none
-  "endTime": string | null,
-  "requiresRewards": boolean,  // loyalty/rewards membership required?
+  "category": string,          // one of: day | time | limited-time
+  "daysOfWeek": string[],      // e.g. ["Mon","Tue"]; [] if not day-of-week based
+  "startTime": string | null,  // time-of-day start, e.g. "15:00" or "3pm"; null if none
+  "endTime": string | null,    // time-of-day end; null if none
+  "validThrough": string | null, // end date for limited-time promos, e.g. "8/2"; null otherwise
+  "requiresRewards": boolean,  // loyalty/rewards/app membership required?
   "sourceUrl": string
 }`;
 
@@ -445,29 +466,34 @@ export async function scanForDeals(scrapedResults) {
       continue;
     }
 
-    // Broadened for MAX recall: extract EVERY customer-facing deal/offer,
-    // not just day/time ones — but stay strictly grounded to prevent
-    // hallucinated deals.
+    // SCOPED to the app: only DAY-specific, TIME-specific, or currently-active
+    // LIMITED-TIME discount deals — with a concrete redeemable value. Broad
+    // stuff (national awareness days, evergreen loyalty, regular menu/value
+    // items, "new item" hype) is explicitly excluded. Stay strictly grounded.
     const system =
-      'You extract EVERY customer-facing restaurant deal, offer, or promotion ' +
-      'from pre-scraped webpage text: recurring day/time specials (happy hour, ' +
-      '"Taco Tuesday"), national food days (e.g. "National Cheeseburger Day"), ' +
-      'holiday/seasonal limited-time offers, BOGO / buy-one-get-one, kids-eat-free, ' +
-      'combos & value meals, coupons, and app/rewards-exclusive offers. Be thorough ' +
-      '— capture any deal a customer could act on. Use ONLY the provided nodes; if ' +
-      'the text does not clearly state a deal, do NOT include it. Never invent names, ' +
-      'days, times, prices, calendar dates, or locations. Return strict JSON only.';
+      'You extract ONLY restaurant deals that fit a "deal of the day" app. A deal ' +
+      'QUALIFIES only if it has BOTH: (a) a CONCRETE redeemable value — a specific ' +
+      '% off, a specific price or $ off, buy-one-get-one, or a free item; AND (b) at ' +
+      'least one TIME constraint — it recurs on specific weekday(s) (e.g. "Wing ' +
+      'Tuesday"), applies during a specific time-of-day window (e.g. "happy hour ' +
+      '3–6pm", "after 10pm"), OR is a currently-running limited-time / dated ' +
+      'promotion (e.g. "50% off all pizzas thru 8/2"). ' +
+      'EXCLUDE everything else: national/awareness food days with no offer, evergreen ' +
+      '"sign up for rewards/app" perks with no day/time/limited window, standard menu ' +
+      'items, value menus, and combos at regular price, and "new item" announcements ' +
+      'that are not discounted. Use ONLY the provided nodes. Never invent names, days, ' +
+      'times, prices, or dates. Return strict JSON only.';
 
     const user =
       `Restaurant page URL: ${site.url}\n\n` +
       `Return JSON of the form { "deals": Deal[] } where each Deal is:\n${DEAL_SHAPE_DOC}\n\n` +
       `Rules:\n` +
-      `- Include EVERY distinct deal/offer/promotion stated in the text — do not limit to day/time deals.\n` +
-      `- category MUST be one of: day-time, national-day, limited-time, bogo, kids, value-combo, app-rewards, other.\n` +
-      `- dealName is the offer's MAIN name (e.g. "3 for Me"); if unnamed, use a short label from the text.\n` +
-      `- daysOfWeek is [] and startTime/endTime null when the deal is not tied to specific days/times (that's fine).\n` +
-      `- requiresRewards is true ONLY if a loyalty/rewards membership or the app is explicitly required.\n` +
-      `- Set any field to null / [] if not stated. Never guess a national day's calendar date.\n` +
+      `- Include a deal ONLY if it has a concrete value AND a time constraint (day, time-of-day, or an active limited-time/dated promo). If either is missing, OMIT it.\n` +
+      `- category MUST be exactly one of: "day" (recurs on weekday(s)), "time" (time-of-day window), "limited-time" (dated/limited promo running now).\n` +
+      `- The description MUST include the concrete value (e.g. "50% off") and the constraint (days/times/end date) as stated.\n` +
+      `- daysOfWeek = the weekday(s) if stated, else []. startTime/endTime = the time window if stated, else null. validThrough = the end date for limited-time promos if stated, else null.\n` +
+      `- requiresRewards = true ONLY if a loyalty/rewards membership or the app is explicitly required.\n` +
+      `- Never guess a value, day, time, or date that isn't in the text. Empty list if nothing qualifies.\n` +
       `- sourceUrl is the page URL above.\n\n` +
       `Scraped nodes (JSON):\n${JSON.stringify(site.nodes)}`;
 
@@ -496,13 +522,13 @@ export async function scanForDeals(scrapedResults) {
       console.log('  No day/time-specific deals found.');
     } else {
       for (const d of deals) {
-        const days = Array.isArray(d.daysOfWeek) ? d.daysOfWeek.join(', ') : '—';
+        const days = Array.isArray(d.daysOfWeek) && d.daysOfWeek.length ? d.daysOfWeek.join(', ') : '—';
         const time =
-          d.startTime || d.endTime ? `${d.startTime || '?'}–${d.endTime || '?'}` : 'all day';
+          d.startTime || d.endTime ? `${d.startTime || '?'}–${d.endTime || '?'}` : '—';
         console.log(
-          `  • ${d.dealName || '(unnamed)'} @ ${d.restaurant || '(restaurant?)'}\n` +
-            `      days: ${days || 'Daily'} | time: ${time}\n` +
-            `      rewards required: ${d.requiresRewards ? 'YES' : 'no'} | location: ${d.location || '—'}\n` +
+          `  • [${d.category || '?'}] ${d.dealName || '(unnamed)'} @ ${d.restaurant || '(restaurant?)'}\n` +
+            `      days: ${days} | time: ${time} | thru: ${d.validThrough || '—'}\n` +
+            `      rewards required: ${d.requiresRewards ? 'YES' : 'no'}\n` +
             `      ${d.description || ''}`,
         );
       }
