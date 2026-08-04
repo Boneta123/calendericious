@@ -82,6 +82,7 @@ export default function LogIn() {
             onChangeText={setPassword}
             placeholder="••••••••"
             secureTextEntry
+            passwordToggle
             error={errors.password}
           />
 

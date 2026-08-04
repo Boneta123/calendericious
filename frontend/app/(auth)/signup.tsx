@@ -26,6 +26,7 @@ export default function SignUp() {
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [zip, setZip] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -38,6 +39,7 @@ export default function SignUp() {
     if (!displayName.trim()) next.displayName = 'Pick a name to show on your deals.';
     if (!/^\S+@\S+\.\S+$/.test(email)) next.email = 'Enter a valid email address.';
     if (password.length < 6) next.password = 'Use at least 6 characters.';
+    if (confirmPassword !== password) next.confirmPassword = 'Passwords do not match.';
     if (!isValidUsZip(zip)) next.zip = 'Enter a valid 5-digit US ZIP code.';
     setErrors(next);
     if (Object.keys(next).length > 0) return;
@@ -107,7 +109,17 @@ export default function SignUp() {
             onChangeText={setPassword}
             placeholder="••••••••"
             secureTextEntry
+            passwordToggle
             error={errors.password}
+          />
+          <TextField
+            label="Confirm password"
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            placeholder="••••••••"
+            secureTextEntry
+            passwordToggle
+            error={errors.confirmPassword}
           />
           <TextField
             label="US ZIP code"
