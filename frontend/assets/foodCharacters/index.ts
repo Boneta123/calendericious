@@ -13,6 +13,9 @@ export const BRAND_LOGO: ImageSourcePropType = require('./calendericiousLogo.png
 /** The group shot — five breakfast pals. Used as auth hero + empty states. */
 export const FOOD_FRIENDS: ImageSourcePropType = require('./breakfastBuddies.png');
 
+/** Shown on the day-detail empty state when there are no deals. */
+export const NO_DEALS: ImageSourcePropType = require('./noDeals.png');
+
 /** Individual mascots, reused across the scattered background. */
 export const CHARACTERS: ImageSourcePropType[] = [
   require('./boba.png'),

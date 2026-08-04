@@ -1,7 +1,8 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { NO_DEALS } from '../../../assets/foodCharacters';
 import { Coupon } from '../../../components/Coupon';
 import { useAuth } from '../../../context/AuthContext';
 import { ApiDeal, dealShowsOnDate, fetchDeals } from '../../../data/api';
@@ -51,12 +52,12 @@ export default function DayDetail() {
 
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.sectionLabel}>
-          🍴 {deals.length > 0 ? 'In time order' : 'Nothing cooking'}
+          {deals.length > 0 ? 'In time order' : 'Nothing cooking'}
         </Text>
 
         {deals.length === 0 ? (
           <View style={styles.empty}>
-            <Text style={styles.emptyEmoji}>🥡</Text>
+            <Image source={NO_DEALS} style={styles.emptyImage} resizeMode="contain" accessible={false} />
             <Text style={styles.emptyTitle}>No deals on {formatLongDate(date)}</Text>
             <Text style={styles.emptySub}>Try another day to scout more deals.</Text>
           </View>
@@ -120,7 +121,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   empty: { alignItems: 'center', paddingVertical: spacing.xxxl },
-  emptyEmoji: { fontSize: 52, marginBottom: spacing.md },
+  emptyImage: { width: 200, height: 200, marginBottom: spacing.lg },
   emptyTitle: {
     fontFamily: fonts.display,
     fontSize: 20,

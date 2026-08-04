@@ -65,12 +65,12 @@ export default function Profile() {
                 <Image source={{ uri: photoUri }} style={styles.avatarImage} />
               ) : (
                 <Text style={styles.avatarText}>
-                  {user?.displayName?.[0]?.toUpperCase() ?? '🙂'}
+                  {user?.displayName?.[0]?.toUpperCase() ?? ''}
                 </Text>
               )}
             </View>
             <View style={styles.cameraBadge}>
-              <Text style={styles.cameraIcon}>📷</Text>
+              <Text style={styles.cameraIcon}>+</Text>
             </View>
           </Pressable>
           <Text style={styles.name}>{user?.displayName}</Text>
@@ -105,9 +105,9 @@ export default function Profile() {
 
         <Text style={styles.sectionLabel}>Coming soon</Text>
         {/* TODO: backend — these rows are placeholders until the API exists. */}
-        <PlaceholderRow icon="🔔" title="Deal notifications" />
-        <PlaceholderRow icon="⭐" title="Favorite chains" />
-        <PlaceholderRow icon="🎟️" title="My rewards accounts" />
+        <PlaceholderRow title="Deal notifications" />
+        <PlaceholderRow title="Favorite chains" />
+        <PlaceholderRow title="My rewards accounts" />
 
         <PrimaryButton
           label="Log out"
@@ -136,10 +136,9 @@ export default function Profile() {
   );
 }
 
-function PlaceholderRow({ icon, title }: { icon: string; title: string }) {
+function PlaceholderRow({ title }: { title: string }) {
   return (
     <View style={[styles.row, styles.rowDisabled]}>
-      <Text style={styles.rowIcon}>{icon}</Text>
       <Text style={[styles.rowTitle, { flex: 1 }]}>{title}</Text>
       <Text style={styles.soon}>Soon</Text>
     </View>

@@ -24,7 +24,7 @@ export default function CalendarHome() {
         {/* Greeting + ZIP chip */}
         <View style={styles.topRow}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.hello}>Hey {user?.displayName} 👋</Text>
+            <Text style={styles.hello}>Hey {user?.displayName}</Text>
             <Text style={styles.tagline}>What's on the menu this month?</Text>
           </View>
           <Pressable
@@ -33,7 +33,7 @@ export default function CalendarHome() {
             accessibilityLabel="Open profile"
           >
             <Text style={styles.avatarText}>
-              {user?.displayName?.[0]?.toUpperCase() ?? '🙂'}
+              {user?.displayName?.[0]?.toUpperCase() ?? ''}
             </Text>
           </Pressable>
         </View>
