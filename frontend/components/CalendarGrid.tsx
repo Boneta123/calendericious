@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
+import { useRestaurantSelection } from '../context/RestaurantSelectionContext';
 import { ApiDeal, dealShowsOnDate, fetchDeals } from '../data/api';
 import { colors, fonts, radii, shadow, spacing } from '../theme/theme';
 import { buildMonthGrid, isSameDay, MONTH_NAMES, WEEKDAY_LABELS } from '../utils/date';
@@ -16,13 +17,16 @@ interface Props {
  */
 export function CalendarGrid({ onSelectDay }: Props) {
   const { user } = useAuth();
+  const { selectedIds } = useRestaurantSelection();
   const [deals, setDeals] = useState<ApiDeal[]>([]);
   const today = new Date();
   const [view, setView] = useState({ year: today.getFullYear(), month: today.getMonth() });
 
+  // Fetch ALL deals once per session; filtering by the user's chosen restaurants
+  // happens live below (client-side) so selection changes reflect immediately.
   useEffect(() => {
     let active = true;
-    fetchDeals(user?.id)
+    fetchDeals()
       .then((d) => active && setDeals(d))
       .catch(() => active && setDeals([]));
     return () => {
@@ -84,7 +88,11 @@ export function CalendarGrid({ onSelectDay }: Props) {
             {week.map((date, di) => {
               const inMonth = date.getMonth() === view.month;
               const isToday = isSameDay(date, today);
-              const hasDeals = inMonth && deals.some((deal) => dealShowsOnDate(deal, date));
+              const hasDeals =
+                inMonth &&
+                deals.some(
+                  (deal) => selectedIds.has(deal.restaurantId) && dealShowsOnDate(deal, date),
+                );
               return (
                 <Pressable
                   key={di}

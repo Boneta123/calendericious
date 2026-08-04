@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { NO_DEALS } from '../../../assets/foodCharacters';
 import { Coupon } from '../../../components/Coupon';
 import { useAuth } from '../../../context/AuthContext';
+import { useRestaurantSelection } from '../../../context/RestaurantSelectionContext';
 import { ApiDeal, dealShowsOnDate, fetchDeals } from '../../../data/api';
 import { colors, fonts, radii, spacing } from '../../../theme/theme';
 import { formatLongDate, fromDateKey, MONTH_NAMES, WEEKDAY_FULL } from '../../../utils/date';
@@ -12,13 +13,15 @@ import { formatLongDate, fromDateKey, MONTH_NAMES, WEEKDAY_FULL } from '../../..
 export default function DayDetail() {
   const { date: dateKey } = useLocalSearchParams<{ date: string }>();
   const { user } = useAuth();
+  const { selectedIds } = useRestaurantSelection();
 
   const date = useMemo(() => fromDateKey(dateKey ?? ''), [dateKey]);
   const [allDeals, setAllDeals] = useState<ApiDeal[]>([]);
 
+  // Fetch ALL deals once; filter to the user's chosen restaurants live below.
   useEffect(() => {
     let active = true;
-    fetchDeals(user?.id)
+    fetchDeals()
       .then((d) => active && setAllDeals(d))
       .catch(() => active && setAllDeals([]));
     return () => {
@@ -27,8 +30,8 @@ export default function DayDetail() {
   }, [user?.id]);
 
   const deals = useMemo(
-    () => allDeals.filter((d) => dealShowsOnDate(d, date)),
-    [allDeals, date],
+    () => allDeals.filter((d) => selectedIds.has(d.restaurantId) && dealShowsOnDate(d, date)),
+    [allDeals, date, selectedIds],
   );
 
   return (

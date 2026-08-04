@@ -82,7 +82,7 @@ const SITES = RESTAURANTS.map((r) => r.url);
 // national food days, holiday/seasonal specials, combos/value, coupons,
 // and app/rewards-exclusive offers, plus the original day/time/price signals.
 const DEAL_SIGNAL =
-  /happy hour|special|free|bogo|buy one|buy 1|kids eat free|deal|daily|weekly|weekday|weekend|today|tonight|limited[- ]?time|for a limited|new |combo|bundle|value|meal deal|coupon|promo|offer|discount|save|%\s?off|\$\s?\d|\d+\s?(cents|¢)|national|holiday|celebrate|anniversary|seasonal|reward|points|member|app[- ]?only|app exclusive|mobile order|order online|\b(mon|tue|wed|thu|fri|sat|sun)\b|\b\d{1,2}(:\d{2})?\s?(am|pm)\b/i;
+  /happy hour|special|free|bogo|buy one|buy 1|kids eat free|deal|daily|weekly|weekday|weekend|today|tonight|limited[- ]?time|for a limited|new |combo|bundle|value|meal deal|coupon|promo|promo code|offer|discount|save|%\s?off|\$\s?\d|\d+\s?(cents|¢)|national|holiday|celebrate|anniversary|seasonal|reward|points|member|membership|loyalty|sign[- ]?up|exclusive|redeem|gift[- ]?card|app[- ]?only|app exclusive|in[- ]the[- ]?app|mobile order|order online|online[- ]?only|digital|\b(mon|tue|wed|thu|fri|sat|sun)\b|\b\d{1,2}(:\d{2})?\s?(am|pm)\b/i;
 
 // ===========================================================================
 // STAGE 1 — THE SCRAPER
@@ -143,9 +143,9 @@ async function scrapeOne(browser, url) {
     // capped and its timeout ignored, so a stubborn site never blocks the run.
     await page.waitForLoadState('domcontentloaded', { timeout: 8000 }).catch(() => {});
     await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => {});
-    // Give JS-heavy sites (deal carousels/menus render client-side) a bit longer
-    // to paint before we read — improves recall on sites like BWW.
-    await page.waitForTimeout(2500);
+    // Give JS-heavy sites (deal carousels/menus render client-side) time to
+    // paint before we read — improves recall on app/rewards-driven sites.
+    await page.waitForTimeout(3500);
 
     // Pass the regex source into the browser (functions can't cross the
     // boundary, but strings can) and rebuild it there.
@@ -316,7 +316,10 @@ async function scrapeOne(browser, url) {
     const stripHash = (u) => u.split('#')[0];
 
     // (1) Best-effort common deal pages. 404s/redirects fail gracefully.
-    const DEAL_PATHS = ['/deals', '/coupons', '/offers', '/specials', '/menu/deals', '/deals-and-coupons'];
+    const DEAL_PATHS = [
+      '/deals', '/coupons', '/offers', '/specials', '/menu/deals', '/deals-and-coupons',
+      '/rewards', '/app', '/promotions', '/promos', '/promo', '/menu', '/gift-cards', '/gift-card',
+    ];
     const guessedDealPages = DEAL_PATHS.map((p) => origin + p);
 
     // (2) Links the page exposed, split by how deal-relevant they are so real
@@ -344,7 +347,7 @@ async function scrapeOne(browser, url) {
     const ordered = [...dealLinks, ...guessedDealPages, ...menuLinks]
       .map(stripHash)
       .filter((u) => u !== url);
-    const uniqueTargets = [...new Set(ordered)].slice(0, 8);
+    const uniqueTargets = [...new Set(ordered)].slice(0, 14);
 
     return { url, nodes, followTargets: uniqueTargets };
   } catch (err) {
@@ -445,6 +448,7 @@ const DEAL_SHAPE_DOC = `{
   "validFrom": string | null,  // START date of a dated/limited promo (e.g. "9/16" of a 9/16–9/20 run); null otherwise
   "validThrough": string | null, // END date for limited-time promos, e.g. "8/2" or "9/20"; null otherwise
   "requiresRewards": boolean,  // loyalty/rewards/app membership required?
+  "onlineOrderOnly": boolean,  // redeemable ONLY via online/app/promo-code order (not in-store)?
   "sourceUrl": string
 }`;
 
@@ -485,37 +489,36 @@ export async function scanForDeals(scrapedResults) {
       continue;
     }
 
-    // SCOPED to the app: only DAY-specific, TIME-specific, or currently-active
-    // LIMITED-TIME discount deals — with a concrete redeemable value. Broad
-    // stuff (national awareness days, evergreen loyalty, regular menu/value
-    // items, "new item" hype) is explicitly excluded. Stay strictly grounded.
+    // BROAD recall: capture EVERY genuine deal with a concrete redeemable value —
+    // day/time-specific, dated/limited, AND ongoing member/rewards/app-exclusive
+    // and online-only offers (e.g. KFC member deals, app-only prices, promo codes).
+    // Only pure marketing with no offer and regular full-price menu are excluded.
     const system =
-      'You extract ONLY restaurant deals that fit a "deal of the day" app. A deal ' +
-      'QUALIFIES only if it has BOTH: (a) a CONCRETE redeemable value — a specific ' +
-      '% off, a specific price or $ off, buy-one-get-one, or a free item; AND (b) at ' +
-      'least one TIME constraint — it recurs on specific weekday(s) (e.g. "Wing ' +
-      'Tuesday"), applies during a specific time-of-day window (e.g. "happy hour ' +
-      '3–6pm", "after 10pm"), OR is a currently-running limited-time / dated ' +
-      'promotion (e.g. "50% off all pizzas thru 8/2"). ' +
-      'EXCLUDE everything else: national/awareness food days with no offer, evergreen ' +
-      '"sign up for rewards/app" perks with no day/time/limited window, standard menu ' +
-      'items, value menus, and combos at regular price, and "new item" announcements ' +
-      'that are not discounted. Use ONLY the provided nodes. Never invent names, days, ' +
-      'times, prices, or dates. Return strict JSON only.';
+      'You extract restaurant DEALS for a deals app. A deal QUALIFIES if it has a ' +
+      'CONCRETE redeemable value — a specific % off, a specific price or $ off, ' +
+      'buy-one-get-one, a free item, or a promo/coupon code that unlocks one. ' +
+      'INCLUDE all of these: deals that recur on weekday(s) ("Wing Tuesday"), ' +
+      'time-of-day/happy-hour deals, currently-running limited-time/dated promos, ' +
+      'AND ongoing offers such as member/rewards/loyalty-gated deals, app-exclusive ' +
+      'or online-only deals, sign-up offers, and promo-code discounts. ' +
+      'EXCLUDE ONLY: pure brand marketing or "new item" hype with no actual offer, ' +
+      'and standard full-price menu items. Use ONLY the provided nodes. Never invent ' +
+      'names, days, times, prices, dates, or URLs. Return strict JSON only.';
 
     const user =
       `Restaurant homepage: ${site.url}\n` +
       `Each scraped node below carries a "pageUrl" (the exact page it was found on) and, for links, an absolute "href".\n\n` +
       `Return JSON of the form { "deals": Deal[] } where each Deal is:\n${DEAL_SHAPE_DOC}\n\n` +
       `Rules:\n` +
-      `- Include a deal ONLY if it has a concrete value AND a time constraint (day, time-of-day, or an active limited-time/dated promo). If either is missing, OMIT it.\n` +
-      `- category MUST be exactly one of: "day" (recurs on weekday(s)), "time" (time-of-day window), "limited-time" (dated/limited promo running now).\n` +
+      `- Include a deal if it has a CONCRETE redeemable value (a specific % off, $ off/price, BOGO, free item, or a promo/coupon code). It does NOT need a day or time — ongoing member/rewards/app/online offers COUNT. Omit only pure marketing with no offer and regular full-price menu items.\n` +
+      `- category MUST be exactly one of: "day" (recurs on weekday(s)), "time" (time-of-day window), "limited-time" (dated/limited promo OR an ongoing/evergreen offer). For an ongoing offer with no day/time/dates, use "limited-time" with daysOfWeek [] and null validFrom/validThrough.\n` +
       `- The description MUST include the concrete value (e.g. "50% off") and the constraint (days/times/end date) as stated.\n` +
       `- daysOfWeek = the weekday(s) if stated, else [].\n` +
       `- Dated promos: if a promo runs a DATE RANGE (e.g. "9/16–9/20" or "now through 9/20"), set validFrom to the START ("9/16") and validThrough to the END ("9/20"). If only an end date is stated, set validThrough and leave validFrom null. Never invent a date not in the text.\n` +
       `- startTime/endTime: if a time-of-day window is stated, output BOTH ends in 24-HOUR "HH:MM" (convert "3pm"->"15:00", "11 AM"->"11:00", "3:30pm"->"15:30"). Output null ONLY when no time-of-day is stated. NEVER output am/pm text or a bare hour.\n` +
       `- sourceUrl MUST be the exact page where THIS deal appears: use that deal's node "pageUrl", or a deal-specific absolute "href" that points to the deal's own page. NEVER default to the homepage unless the deal genuinely appears on the homepage.\n` +
-      `- requiresRewards = true ONLY if a loyalty/rewards membership or the app is explicitly required.\n` +
+      `- requiresRewards = true if a loyalty/rewards membership or the app is required to redeem (these deals ARE included).\n` +
+      `- onlineOrderOnly = true if the deal is redeemable ONLY via online ordering, the app, or a promo/coupon code (not in-store); else false.\n` +
       `- Never guess a value, day, time, date, or URL not present in the nodes. Empty list if nothing qualifies.\n\n` +
       `Scraped nodes (JSON):\n${JSON.stringify(site.nodes)}`;
 

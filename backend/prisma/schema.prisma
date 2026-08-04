@@ -91,6 +91,7 @@ model Deal {
   validFrom      DateTime? // start date for dated/limited promos (e.g. 9/16 of a 9/16–9/20 run); null otherwise
   validThrough   DateTime? // end date for limited-time promos; null otherwise
   requiresRewards Boolean  @default(false) // loyalty/rewards/app membership required
+  onlineOrderOnly Boolean  @default(false) // redeemable ONLY via online/app/promo-code order
   sourceUrl      String? // page the deal was scraped from (traceability)
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)

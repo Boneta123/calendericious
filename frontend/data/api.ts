@@ -66,6 +66,7 @@ export interface ApiDeal {
   validFrom: string | null; // ISO date — start of a dated/limited promo
   validThrough: string | null; // ISO date — end of a dated/limited promo
   requiresRewards: boolean;
+  onlineOrderOnly: boolean; // redeemable only via online/app/promo-code order
   sourceUrl: string | null;
   createdAt: string;
   updatedAt: string;
@@ -150,8 +151,9 @@ function dayOnly(value: Date | string): Date {
  *   - never before validFrom, never after validThrough (a 9/16–9/20 run shows
  *     ONLY 9/16–9/20 — no days before it starts)
  *   - if daysOfWeek is set, the date's weekday must match (within any window)
- *   - empty daysOfWeek: DAY → never; TIME → daily; LIMITED_TIME → only when it
- *     actually has a date window (so it can't flood every day)
+ *   - empty daysOfWeek → the deal is ongoing and shows every day (within any
+ *     validFrom/validThrough window). This surfaces member/app/online and other
+ *     evergreen deals that have no specific day/time.
  */
 export function dealShowsOnDate(deal: ApiDeal, date: Date): boolean {
   const d = dayOnly(date);
@@ -161,8 +163,5 @@ export function dealShowsOnDate(deal: ApiDeal, date: Date): boolean {
   if (deal.validThrough && d > dayOnly(deal.validThrough)) return false;
 
   if (deal.daysOfWeek.length > 0) return deal.daysOfWeek.includes(d.getDay());
-
-  if (deal.category === 'DAY') return false;
-  if (deal.category === 'TIME') return true;
-  return Boolean(deal.validFrom || deal.validThrough); // LIMITED_TIME needs a window
+  return true; // no weekday specified → ongoing, shows every day (window-gated above)
 }

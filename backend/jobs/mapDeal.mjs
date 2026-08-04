@@ -111,6 +111,7 @@ export function mapDeal(raw, restaurantId) {
     validFrom: parseDate(raw.validFrom),
     validThrough: parseDate(raw.validThrough),
     requiresRewards: Boolean(raw.requiresRewards),
+    onlineOrderOnly: Boolean(raw.onlineOrderOnly),
     sourceUrl: orNull(raw.sourceUrl),
   };
 }

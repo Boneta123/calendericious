@@ -74,10 +74,11 @@ export async function runDealsRefresh() {
 }
 
 /**
- * Schedule the daily refresh. '0 6 * * *' = 06:00 every day.
- * NOTE: node-cron uses the server's local timezone unless configured.
+ * Schedule the refresh every 2 days at 06:00 (cron step of 2 on the
+ * day-of-month field). ~48h apart; resets at month end (e.g. 30 -> 2).
+ * node-cron uses the server's local timezone unless configured.
  */
 export function startDealsCron() {
-  cron.schedule('0 6 * * *', runDealsRefresh);
-  console.log('[dealsJob] scheduled daily refresh at 06:00 (server local time).');
+  cron.schedule('0 6 */2 * *', runDealsRefresh);
+  console.log('[dealsJob] scheduled refresh every 2 days at 06:00 (server local time).');
 }

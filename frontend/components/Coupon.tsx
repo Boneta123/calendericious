@@ -35,6 +35,7 @@ export function Coupon({ item }: { item: ApiDeal }) {
 
         <View style={styles.badgeRow}>
           <Badge label={allDay ? 'All day' : 'Timed deal'} tone={allDay ? 'basil' : 'mustard'} />
+          {item.onlineOrderOnly && <Badge label="Online only" tone="basil" />}
           {item.requiresRewards && <Badge label="Rewards required" tone="grape" />}
         </View>
 
