@@ -23,10 +23,31 @@ router.get('/restaurants', async (_req, res, next) => {
   }
 });
 
-// Replace the user's selected restaurants. body: { restaurantIds: [] }
-router.put('/users/:id/restaurants', auth, (_req, res) => {
-  // TODO: implement — persist the user's selected restaurant ids (DB not built yet).
-  res.status(501).json({ error: 'Not implemented' });
+// Replace the user's selected restaurants. body: { restaurantIds: string[] }
+router.put('/users/:id/restaurants', auth, async (req, res, next) => {
+  try {
+    const userId = req.params.id;
+    const requested = Array.isArray(req.body?.restaurantIds) ? req.body.restaurantIds : [];
+
+    // Keep only ids that are real restaurants.
+    const valid = await prisma.restaurant.findMany({
+      where: { id: { in: requested } },
+      select: { id: true },
+    });
+    const ids = valid.map((r) => r.id);
+
+    // Replace this user's selection atomically.
+    await prisma.$transaction([
+      prisma.userRestaurant.deleteMany({ where: { userId } }),
+      ...(ids.length
+        ? [prisma.userRestaurant.createMany({ data: ids.map((restaurantId) => ({ userId, restaurantId })) })]
+        : []),
+    ]);
+
+    res.json({ restaurantIds: ids });
+  } catch (err) {
+    next(err);
+  }
 });
 
 export default router;

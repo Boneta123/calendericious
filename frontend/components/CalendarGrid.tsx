@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useAuth } from '../context/AuthContext';
 import { ApiDeal, dealShowsOnDate, fetchDeals } from '../data/api';
 import { colors, fonts, radii, shadow, spacing } from '../theme/theme';
 import { buildMonthGrid, isSameDay, MONTH_NAMES, WEEKDAY_LABELS } from '../utils/date';
@@ -14,19 +15,20 @@ interface Props {
  * least one deal actually falls on that exact date (see `dealShowsOnDate`).
  */
 export function CalendarGrid({ onSelectDay }: Props) {
+  const { user } = useAuth();
   const [deals, setDeals] = useState<ApiDeal[]>([]);
   const today = new Date();
   const [view, setView] = useState({ year: today.getFullYear(), month: today.getMonth() });
 
   useEffect(() => {
     let active = true;
-    fetchDeals()
+    fetchDeals(user?.id)
       .then((d) => active && setDeals(d))
       .catch(() => active && setDeals([]));
     return () => {
       active = false;
     };
-  }, []);
+  }, [user?.id]);
 
   // Future-only window: from the current month up to 11 months ahead.
   const currentIndex = today.getFullYear() * 12 + today.getMonth();

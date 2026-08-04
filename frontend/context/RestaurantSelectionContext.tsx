@@ -13,6 +13,8 @@ interface RestaurantSelectionValue {
   isSelected: (id: string) => boolean;
   toggle: (id: string) => void;
   add: (id: string) => void;
+  /** Replace the whole selection (e.g. hydrate from the logged-in user). */
+  setAll: (ids: string[]) => void;
 }
 
 const Ctx = createContext<RestaurantSelectionValue | undefined>(undefined);
@@ -32,6 +34,10 @@ export function RestaurantSelectionProvider({ children }: { children: React.Reac
     setSelectedIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
   }, []);
 
+  const setAll = useCallback((ids: string[]) => {
+    setSelectedIds(new Set(ids));
+  }, []);
+
   const value = useMemo<RestaurantSelectionValue>(
     () => ({
       selectedIds,
@@ -39,8 +45,9 @@ export function RestaurantSelectionProvider({ children }: { children: React.Reac
       isSelected: (id) => selectedIds.has(id),
       toggle,
       add,
+      setAll,
     }),
-    [selectedIds, toggle, add],
+    [selectedIds, toggle, add, setAll],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

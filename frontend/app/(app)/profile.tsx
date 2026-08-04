@@ -8,6 +8,7 @@ import { RestaurantPickerModal } from '../../components/RestaurantPickerModal';
 import { ZipModal } from '../../components/ZipModal';
 import { useAuth } from '../../context/AuthContext';
 import { useRestaurantSelection } from '../../context/RestaurantSelectionContext';
+import { saveRestaurants } from '../../data/api';
 import { colors, fonts, radii, shadow, spacing } from '../../theme/theme';
 
 /**
@@ -17,7 +18,7 @@ import { colors, fonts, radii, shadow, spacing } from '../../theme/theme';
  */
 export default function Profile() {
   const { user, updateZip, logOut } = useAuth();
-  const { count: restaurantCount } = useRestaurantSelection();
+  const { count: restaurantCount, selectedIds } = useRestaurantSelection();
   const [zipModal, setZipModal] = useState(false);
   const [restaurantModal, setRestaurantModal] = useState(false);
   // Local only — the chosen photo is kept in memory for this session. No
@@ -125,7 +126,11 @@ export default function Profile() {
 
       <RestaurantPickerModal
         visible={restaurantModal}
-        onClose={() => setRestaurantModal(false)}
+        onClose={() => {
+          setRestaurantModal(false);
+          // Persist the updated selection (best-effort; also kept in memory).
+          if (user) saveRestaurants(user.id, [...selectedIds]).catch(() => {});
+        }}
       />
     </SafeAreaView>
   );

@@ -15,23 +15,34 @@ import { BrandLogo } from '../../components/BrandLogo';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { TextField } from '../../components/TextField';
 import { useAuth } from '../../context/AuthContext';
+import { useRestaurantSelection } from '../../context/RestaurantSelectionContext';
 import { colors, fonts, spacing } from '../../theme/theme';
 
 export default function LogIn() {
   const { logIn } = useAuth();
+  const { setAll } = useRestaurantSelection();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const next: Record<string, string> = {};
     if (!/^\S+@\S+\.\S+$/.test(email)) next.email = 'Enter a valid email address.';
     if (password.length < 1) next.password = 'Enter your password.';
     setErrors(next);
     if (Object.keys(next).length > 0) return;
 
-    logIn({ email, password });
-    router.replace('/(app)');
+    setSubmitting(true);
+    try {
+      const user = await logIn({ email, password });
+      setAll(user.restaurantIds); // hydrate the saved selection
+      router.replace('/(app)');
+    } catch (err) {
+      setErrors({ form: err instanceof Error ? err.message : 'Could not log in.' });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -74,7 +85,14 @@ export default function LogIn() {
             error={errors.password}
           />
 
-          <PrimaryButton label="Log in" onPress={handleSubmit} style={{ marginTop: spacing.sm }} />
+          {errors.form ? <Text style={styles.formError}>{errors.form}</Text> : null}
+
+          <PrimaryButton
+            label={submitting ? 'Logging in…' : 'Log in'}
+            onPress={handleSubmit}
+            disabled={submitting}
+            style={{ marginTop: spacing.sm }}
+          />
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>New here? </Text>
@@ -113,6 +131,13 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     lineHeight: 22,
     textAlign: 'center',
+  },
+  formError: {
+    fontFamily: fonts.bodySemi,
+    fontSize: 14,
+    color: colors.tomato,
+    textAlign: 'center',
+    marginTop: spacing.sm,
   },
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: spacing.xl },
   footerText: { fontFamily: fonts.bodySemi, fontSize: 15, color: colors.inkSoft },

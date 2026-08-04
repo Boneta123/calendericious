@@ -30,11 +30,12 @@ enum DealCategory {
 /// App user. Mirrors AuthContext (email, displayName, zip) + profile photo.
 model User {
   id           String   @id @default(cuid())
-  username     String   @unique
-  email        String   @unique
+  displayName  String // human name shown when referencing the user (not unique)
+  email        String   @unique // the login identity
   passwordHash String // hash only — never plaintext; hashed at the app layer
   profilePhoto String? // URL/path to the image, not binary
   zip          String // 5-digit US ZIP
+  lastLoginAt  DateTime? // set on each successful login (admin dashboard)
 
   restaurants UserRestaurant[]
 

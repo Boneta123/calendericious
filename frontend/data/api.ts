@@ -72,13 +72,68 @@ export interface ApiDeal {
   restaurant: ApiDealRestaurant;
 }
 
-/** Fetch all stored deals. Throws on a non-2xx response. */
-export async function fetchDeals(): Promise<ApiDeal[]> {
-  const res = await fetch(`${API_BASE}/api/deals`);
+/** Fetch stored deals. With a userId, only that user's chosen restaurants'
+ *  deals are returned. Throws on a non-2xx response. */
+export async function fetchDeals(userId?: string): Promise<ApiDeal[]> {
+  const qs = userId ? `?userId=${encodeURIComponent(userId)}` : '';
+  const res = await fetch(`${API_BASE}/api/deals${qs}`);
   if (!res.ok) {
     throw new Error(`fetchDeals failed: ${res.status} ${res.statusText}`);
   }
   return (await res.json()) as ApiDeal[];
+}
+
+// --- Auth ------------------------------------------------------------------
+
+/** The logged-in user as returned by the API (never includes the password). */
+export interface AuthUser {
+  id: string;
+  displayName: string;
+  email: string;
+  zip: string;
+  profilePhoto: string | null;
+  restaurantIds: string[];
+}
+
+/** POST/PUT JSON helper — throws an Error carrying the server's `error` on non-2xx. */
+async function sendJson<T>(path: string, method: string, body: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((data && (data as { error?: string }).error) || `Request failed (${res.status})`);
+  }
+  return data as T;
+}
+
+/** Create an account. Email is the login identity; displayName is shown. */
+export function createAccount(input: {
+  displayName: string;
+  email: string;
+  password: string;
+  zip: string;
+}): Promise<AuthUser> {
+  return sendJson<AuthUser>('/api/users', 'POST', input);
+}
+
+/** Log in with email + password. */
+export function login(input: { email: string; password: string }): Promise<AuthUser> {
+  return sendJson<AuthUser>('/api/auth/login', 'POST', input);
+}
+
+/** Persist the user's chosen restaurants; returns the saved ids. */
+export function saveRestaurants(
+  userId: string,
+  restaurantIds: string[],
+): Promise<{ restaurantIds: string[] }> {
+  return sendJson<{ restaurantIds: string[] }>(
+    `/api/users/${userId}/restaurants`,
+    'PUT',
+    { restaurantIds },
+  );
 }
 
 /** Strip a Date/ISO string to local midnight (calendar-day comparison, no TZ drift). */

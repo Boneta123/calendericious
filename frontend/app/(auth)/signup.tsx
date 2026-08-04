@@ -14,22 +14,26 @@ import { PrimaryButton } from '../../components/PrimaryButton';
 import { RestaurantPickerModal } from '../../components/RestaurantPickerModal';
 import { TextField } from '../../components/TextField';
 import { useAuth } from '../../context/AuthContext';
+import { useRestaurantSelection } from '../../context/RestaurantSelectionContext';
+import { saveRestaurants } from '../../data/api';
 import { pickRandom } from '../../data/restaurants';
 import { colors, fonts, spacing } from '../../theme/theme';
 import { isValidUsZip, sanitizeZipInput } from '../../utils/zip';
 
 export default function SignUp() {
-  const { signUp } = useAuth();
+  const { signUp, user } = useAuth();
+  const { selectedIds } = useRestaurantSelection();
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [zip, setZip] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
   // After the account is created, gate entry behind picking ≥1 restaurant.
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [recommendations] = useState(() => pickRandom(3));
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const next: Record<string, string> = {};
     if (!displayName.trim()) next.displayName = 'Pick a name to show on your deals.';
     if (!/^\S+@\S+\.\S+$/.test(email)) next.email = 'Enter a valid email address.';
@@ -38,9 +42,29 @@ export default function SignUp() {
     setErrors(next);
     if (Object.keys(next).length > 0) return;
 
-    // Account created; show the required restaurant onboarding before entering.
-    signUp({ email, password, displayName: displayName.trim(), zip });
-    setShowOnboarding(true);
+    // Create the account; only show onboarding once the server confirms it.
+    setSubmitting(true);
+    try {
+      await signUp({ email, password, displayName: displayName.trim(), zip });
+      setShowOnboarding(true);
+    } catch (err) {
+      setErrors({ form: err instanceof Error ? err.message : 'Could not create account.' });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleContinue = async () => {
+    // Best-effort persist of the chosen restaurants, then enter the app.
+    if (user) {
+      try {
+        await saveRestaurants(user.id, [...selectedIds]);
+      } catch {
+        // non-blocking — the selection is also kept in memory for this session
+      }
+    }
+    setShowOnboarding(false);
+    router.replace('/(app)');
   };
 
   return (
@@ -96,7 +120,14 @@ export default function SignUp() {
             mono
           />
 
-          <PrimaryButton label="Create account" onPress={handleSubmit} style={{ marginTop: spacing.sm }} />
+          {errors.form ? <Text style={styles.formError}>{errors.form}</Text> : null}
+
+          <PrimaryButton
+            label={submitting ? 'Creating…' : 'Create account'}
+            onPress={handleSubmit}
+            disabled={submitting}
+            style={{ marginTop: spacing.sm }}
+          />
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>Already have an account? </Text>
@@ -111,10 +142,7 @@ export default function SignUp() {
         visible={showOnboarding}
         mode="onboarding"
         recommended={recommendations}
-        onContinue={() => {
-          setShowOnboarding(false);
-          router.replace('/(app)');
-        }}
+        onContinue={handleContinue}
       />
     </SafeAreaView>
   );
@@ -139,6 +167,13 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     lineHeight: 22,
     textAlign: 'center',
+  },
+  formError: {
+    fontFamily: fonts.bodySemi,
+    fontSize: 14,
+    color: colors.tomato,
+    textAlign: 'center',
+    marginTop: spacing.sm,
   },
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: spacing.xl },
   footerText: { fontFamily: fonts.bodySemi, fontSize: 15, color: colors.inkSoft },

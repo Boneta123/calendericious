@@ -3,25 +3,27 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Coupon } from '../../../components/Coupon';
+import { useAuth } from '../../../context/AuthContext';
 import { ApiDeal, dealShowsOnDate, fetchDeals } from '../../../data/api';
 import { colors, fonts, radii, spacing } from '../../../theme/theme';
 import { formatLongDate, fromDateKey, MONTH_NAMES, WEEKDAY_FULL } from '../../../utils/date';
 
 export default function DayDetail() {
   const { date: dateKey } = useLocalSearchParams<{ date: string }>();
+  const { user } = useAuth();
 
   const date = useMemo(() => fromDateKey(dateKey ?? ''), [dateKey]);
   const [allDeals, setAllDeals] = useState<ApiDeal[]>([]);
 
   useEffect(() => {
     let active = true;
-    fetchDeals()
+    fetchDeals(user?.id)
       .then((d) => active && setAllDeals(d))
       .catch(() => active && setAllDeals([]));
     return () => {
       active = false;
     };
-  }, []);
+  }, [user?.id]);
 
   const deals = useMemo(
     () => allDeals.filter((d) => dealShowsOnDate(d, date)),

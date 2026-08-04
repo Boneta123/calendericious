@@ -13,6 +13,7 @@ import { networkInterfaces } from 'node:os';
 import cors from 'cors';
 import express from 'express';
 
+import adminRouter from './admin.mjs';
 import dealsRouter from './routes/deals.mjs';
 import profilePhotoRouter from './routes/profilePhoto.mjs';
 import restaurantsRouter from './routes/restaurants.mjs';
@@ -43,6 +44,9 @@ app.use('/api', profilePhotoRouter);
 app.use('/api', zipRouter);
 app.use('/api', dealsRouter);
 app.use('/api', restaurantsRouter);
+
+// --- Admin dashboard (registered users + last-login), outside /api ---------
+app.use('/admin', adminRouter);
 
 // --- 404 + error handlers --------------------------------------------------
 app.use((_req, res) => {

@@ -1,24 +1,25 @@
 /**
- * Auth + ZIP state for DealDay.
+ * Auth + ZIP state.
  *
- * Phase 1: purely in-memory. `signUp` / `logIn` just set the current user in
- * React state — there is NO real authentication and NO persistence. When the
- * backend arrives, swap the bodies of these functions; the surface stays the
- * same.
+ * Real create-account + login against the backend (email = login identity,
+ * displayName = shown name; passwords hashed server-side). No tokens/MFA and no
+ * cross-restart session yet — the user logs in each launch.
  */
 
 import React, { createContext, useContext, useMemo, useState } from 'react';
+import { AuthUser, createAccount, login as loginApi } from '../data/api';
 
-export interface User {
-  email: string;
-  displayName: string;
-  zip: string;
-}
+export type User = AuthUser;
 
 interface AuthContextValue {
   user: User | null;
-  signUp: (input: { email: string; password: string; displayName: string; zip: string }) => void;
-  logIn: (input: { email: string; password: string }) => void;
+  signUp: (input: {
+    displayName: string;
+    email: string;
+    password: string;
+    zip: string;
+  }) => Promise<User>;
+  logIn: (input: { email: string; password: string }) => Promise<User>;
   logOut: () => void;
   updateZip: (zip: string) => void;
 }
@@ -31,22 +32,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
-      signUp: ({ email, displayName, zip }) => {
-        // TODO: backend — create account. Password is accepted but not stored.
-        setUser({ email, displayName, zip });
+      signUp: async (input) => {
+        const created = await createAccount(input);
+        setUser(created);
+        return created;
       },
-      logIn: ({ email }) => {
-        // TODO: backend — verify credentials. For now, sign in with a
-        // placeholder profile so the flow is walkable end to end.
-        setUser({
-          email,
-          displayName: email.split('@')[0] || 'Friend',
-          zip: '10001',
-        });
+      logIn: async (input) => {
+        const loggedIn = await loginApi(input);
+        setUser(loggedIn);
+        return loggedIn;
       },
       logOut: () => setUser(null),
-      updateZip: (zip) =>
-        setUser((prev) => (prev ? { ...prev, zip } : prev)),
+      updateZip: (zip) => setUser((prev) => (prev ? { ...prev, zip } : prev)),
     }),
     [user],
   );
