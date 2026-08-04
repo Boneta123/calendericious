@@ -22,6 +22,8 @@ interface Props {
   mono?: boolean;
   /** Show a Show/Hide toggle for password fields. */
   passwordToggle?: boolean;
+  /** Persistent hint shown below the input when there's no error. */
+  helper?: string;
 }
 
 export function TextField({
@@ -36,6 +38,7 @@ export function TextField({
   maxLength,
   mono = false,
   passwordToggle = false,
+  helper,
 }: Props) {
   const [hidden, setHidden] = useState(true);
   // When the toggle is on, this field controls its own masking.
@@ -73,7 +76,11 @@ export function TextField({
           </Pressable>
         )}
       </View>
-      {!!error && <Text style={styles.error}>{error}</Text>}
+      {error ? (
+        <Text style={styles.error}>{error}</Text>
+      ) : helper ? (
+        <Text style={styles.helper}>{helper}</Text>
+      ) : null}
     </View>
   );
 }
@@ -104,6 +111,13 @@ const styles = StyleSheet.create({
   inputWithToggle: { paddingRight: 72 },
   mono: { fontFamily: fonts.monoBold, letterSpacing: 2, fontSize: 18 },
   inputError: { borderColor: colors.tomato },
+  helper: {
+    fontFamily: fonts.bodySemi,
+    fontSize: 12,
+    color: colors.inkSoft,
+    marginTop: spacing.xs,
+    marginLeft: spacing.xs,
+  },
   toggle: {
     position: 'absolute',
     right: spacing.lg,

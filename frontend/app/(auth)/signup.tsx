@@ -38,7 +38,8 @@ export default function SignUp() {
     const next: Record<string, string> = {};
     if (!displayName.trim()) next.displayName = 'Pick a name to show on your deals.';
     if (!/^\S+@\S+\.\S+$/.test(email)) next.email = 'Enter a valid email address.';
-    if (password.length < 6) next.password = 'Use at least 6 characters.';
+    if (password.length <= 7 || !/[^A-Za-z0-9]/.test(password))
+      next.password = 'Must be more than 7 characters and include a special character.';
     if (confirmPassword !== password) next.confirmPassword = 'Passwords do not match.';
     if (!isValidUsZip(zip)) next.zip = 'Enter a valid 5-digit US ZIP code.';
     setErrors(next);
@@ -50,7 +51,13 @@ export default function SignUp() {
       await signUp({ email, password, displayName: displayName.trim(), zip });
       setShowOnboarding(true);
     } catch (err) {
-      setErrors({ form: err instanceof Error ? err.message : 'Could not create account.' });
+      const msg = err instanceof Error ? err.message : 'Could not create account.';
+      // Surface a duplicate-email conflict under the Email field.
+      if (/email/i.test(msg) && /(already|registered|use|taken|exist)/i.test(msg)) {
+        setErrors({ email: 'This email is already in use.' });
+      } else {
+        setErrors({ form: msg });
+      }
     } finally {
       setSubmitting(false);
     }
@@ -102,6 +109,7 @@ export default function SignUp() {
             placeholder="you@email.com"
             keyboardType="email-address"
             error={errors.email}
+            helper="Must not already be in use."
           />
           <TextField
             label="Password"
@@ -111,6 +119,7 @@ export default function SignUp() {
             secureTextEntry
             passwordToggle
             error={errors.password}
+            helper="More than 7 characters and at least one special character (!@#$…)."
           />
           <TextField
             label="Confirm password"

@@ -32,8 +32,10 @@ router.post('/users', async (req, res, next) => {
     if (!name) return res.status(400).json({ error: 'Display name is required.' });
     if (typeof email !== 'string' || !EMAIL_RE.test(email))
       return res.status(400).json({ error: 'A valid email is required.' });
-    if (typeof password !== 'string' || password.length < 6)
-      return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+    if (typeof password !== 'string' || password.length <= 7 || !/[^A-Za-z0-9]/.test(password))
+      return res
+        .status(400)
+        .json({ error: 'Password must be more than 7 characters and include a special character.' });
     if (typeof zip !== 'string' || !zip.trim())
       return res.status(400).json({ error: 'ZIP is required.' });
 
