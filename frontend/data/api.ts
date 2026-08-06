@@ -125,6 +125,20 @@ export function login(input: { email: string; password: string }): Promise<AuthU
   return sendJson<AuthUser>('/api/auth/login', 'POST', input);
 }
 
+/** Request a password-reset code by email. Always resolves (generic response). */
+export function forgotPassword(email: string): Promise<{ ok: boolean }> {
+  return sendJson<{ ok: boolean }>('/api/auth/forgot-password', 'POST', { email });
+}
+
+/** Reset the password using the emailed code. Throws on invalid/expired code. */
+export function resetPassword(input: {
+  email: string;
+  code: string;
+  newPassword: string;
+}): Promise<{ ok: boolean }> {
+  return sendJson<{ ok: boolean }>('/api/auth/reset-password', 'POST', input);
+}
+
 /** Save the user's profile photo (a compressed base64 data URI). */
 export function saveProfilePhoto(
   userId: string,

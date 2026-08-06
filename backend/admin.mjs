@@ -79,10 +79,22 @@ router.get('/api/users', gate, async (_req, res, next) => {
   }
 });
 
+// Delete a user account (cascades to their UserRestaurant rows via the schema).
+router.delete('/api/users/:id', gate, async (req, res, next) => {
+  try {
+    await prisma.user.delete({ where: { id: req.params.id } });
+    res.json({ ok: true });
+  } catch (err) {
+    if (err && err.code === 'P2025') return res.status(404).json({ error: 'User not found' });
+    next(err);
+  }
+});
+
 // HTML dashboard — self-contained (inline CSS + JS). Styled to match the app.
 router.get('/', gate, (req, res) => {
   const key = process.env.ADMIN_KEY ? encodeURIComponent(String(req.query.key ?? '')) : '';
   const usersUrl = key ? `/admin/api/users?key=${key}` : '/admin/api/users';
+  const keyQs = key ? `?key=${key}` : ''; // appended to the DELETE URL when gated
   res.type('html').send(`<!doctype html>
 <html lang="en">
 <head>
@@ -151,6 +163,11 @@ router.get('/', gate, (req, res) => {
   .mono { font-family: var(--mono); font-size: 13px; font-variant-numeric: tabular-nums; }
   .count { font-family: var(--mono); font-weight: 700; color: var(--grape); }
   .never { color: var(--ink-faint); font-style: italic; }
+  .btn-remove { font-family: var(--body); font-weight: 800; font-size: 12px; text-transform: uppercase;
+                letter-spacing: .5px; color: #fff; background: var(--tomato); border: none;
+                border-radius: 999px; padding: 7px 14px; cursor: pointer; white-space: nowrap; }
+  .btn-remove:hover { background: #E64420; }
+  .btn-remove:disabled { opacity: .5; cursor: default; }
   .loading, .empty { padding: 28px 16px; color: var(--ink-soft); text-align: center; font-weight: 600; }
 
   @media (max-width: 560px) {
@@ -187,9 +204,9 @@ router.get('/', gate, (req, res) => {
       <div class="scroll">
         <table>
           <thead><tr>
-            <th>Display name</th><th>Email</th><th>ZIP</th><th># Restaurants</th><th>Joined</th><th>Last login</th>
+            <th>Display name</th><th>Email</th><th>ZIP</th><th># Restaurants</th><th>Joined</th><th>Last login</th><th>Actions</th>
           </tr></thead>
-          <tbody id="rows"><tr><td colspan="6" class="loading">Loading…</td></tr></tbody>
+          <tbody id="rows"><tr><td colspan="7" class="loading">Loading…</td></tr></tbody>
         </table>
       </div>
     </section>
@@ -206,7 +223,7 @@ router.get('/', gate, (req, res) => {
       document.getElementById('active24').textContent =
         users.filter(u => u.lastLoginAt && new Date(u.lastLoginAt).getTime() >= dayAgo).length;
       const tbody = document.getElementById('rows');
-      if (!users.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty">No users yet — create an account in the app.</td></tr>'; return; }
+      if (!users.length) { tbody.innerHTML = '<tr><td colspan="7" class="empty">No users yet — create an account in the app.</td></tr>'; return; }
       tbody.innerHTML = users.map(u => (
         '<tr>' +
           '<td class="name">' + esc(u.displayName) + '</td>' +
@@ -215,10 +232,23 @@ router.get('/', gate, (req, res) => {
           '<td class="count">' + esc(u.restaurantCount) + '</td>' +
           '<td class="mono">' + esc(fmt(u.createdAt)) + '</td>' +
           '<td class="mono">' + (u.lastLoginAt ? esc(fmt(u.lastLoginAt)) : '<span class="never">never</span>') + '</td>' +
+          '<td><button class="btn-remove" data-id="' + esc(u.id) + '" data-name="' + esc(u.displayName) + '">Remove</button></td>' +
         '</tr>'
       )).join('');
+      tbody.querySelectorAll('.btn-remove').forEach(btn => btn.addEventListener('click', () => removeUser(btn)));
     })
-    .catch(() => { document.getElementById('rows').innerHTML = '<tr><td colspan="6" class="empty">Failed to load users.</td></tr>'; });
+    .catch(() => { document.getElementById('rows').innerHTML = '<tr><td colspan="7" class="empty">Failed to load users.</td></tr>'; });
+
+  const DELETE_KEY_QS = ${JSON.stringify(keyQs)};
+  function removeUser(btn) {
+    const id = btn.getAttribute('data-id');
+    const name = btn.getAttribute('data-name');
+    if (!confirm('Delete the account for ' + name + '? This permanently removes the user and cannot be undone.')) return;
+    btn.disabled = true; btn.textContent = 'Removing…';
+    fetch('/admin/api/users/' + encodeURIComponent(id) + DELETE_KEY_QS, { method: 'DELETE' })
+      .then(r => { if (!r.ok) throw new Error(); location.reload(); })
+      .catch(() => { btn.disabled = false; btn.textContent = 'Remove'; alert('Failed to remove user.'); });
+  }
 </script>
 </body>
 </html>`);

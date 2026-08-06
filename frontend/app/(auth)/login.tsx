@@ -4,6 +4,7 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -16,6 +17,7 @@ import { PrimaryButton } from '../../components/PrimaryButton';
 import { TextField } from '../../components/TextField';
 import { useAuth } from '../../context/AuthContext';
 import { useRestaurantSelection } from '../../context/RestaurantSelectionContext';
+import { ForgotPasswordModal } from '../../components/ForgotPasswordModal';
 import { colors, fonts, spacing } from '../../theme/theme';
 
 export default function LogIn() {
@@ -25,6 +27,7 @@ export default function LogIn() {
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [forgotVisible, setForgotVisible] = useState(false);
 
   const handleSubmit = async () => {
     const next: Record<string, string> = {};
@@ -86,6 +89,10 @@ export default function LogIn() {
             error={errors.password}
           />
 
+          <Pressable onPress={() => setForgotVisible(true)} style={styles.forgot}>
+            <Text style={styles.forgotText}>Forgot password?</Text>
+          </Pressable>
+
           {errors.form ? <Text style={styles.formError}>{errors.form}</Text> : null}
 
           <PrimaryButton
@@ -103,6 +110,8 @@ export default function LogIn() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <ForgotPasswordModal visible={forgotVisible} onClose={() => setForgotVisible(false)} />
     </SafeAreaView>
   );
 }
@@ -143,4 +152,6 @@ const styles = StyleSheet.create({
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: spacing.xl },
   footerText: { fontFamily: fonts.bodySemi, fontSize: 15, color: colors.inkSoft },
   footerLink: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.tomato },
+  forgot: { alignSelf: 'flex-end', marginTop: -spacing.sm, marginBottom: spacing.sm, padding: spacing.xs },
+  forgotText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.tomato },
 });

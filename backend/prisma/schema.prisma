@@ -36,6 +36,8 @@ model User {
   profilePhoto String? // URL/path to the image, not binary
   zip          String // 5-digit US ZIP
   lastLoginAt  DateTime? // set on each successful login (admin dashboard)
+  resetCodeHash      String?   // hash of the 6-digit password-reset code (single-use)
+  resetCodeExpiresAt DateTime? // when the reset code expires (~15 min)
 
   restaurants UserRestaurant[]
 
