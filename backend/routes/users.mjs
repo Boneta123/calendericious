@@ -131,11 +131,18 @@ router.post('/auth/reset-password', resetLimiter, async (req, res, next) => {
 
     const user = await prisma.user.findUnique({
       where: { email },
-      select: { id: true, resetCodeHash: true, resetCodeExpiresAt: true },
+      select: { id: true, passwordHash: true, resetCodeHash: true, resetCodeExpiresAt: true },
     });
     const expired = !user?.resetCodeExpiresAt || user.resetCodeExpiresAt.getTime() < Date.now();
     if (!user || !user.resetCodeHash || expired || !verifyPassword(code, user.resetCodeHash)) {
       return res.status(400).json({ error: 'Invalid or expired code.' });
+    }
+
+    // The new password must differ from the current one.
+    if (verifyPassword(newPassword, user.passwordHash)) {
+      return res
+        .status(400)
+        .json({ error: 'New password must be different from your current password.' });
     }
 
     await prisma.user.update({
