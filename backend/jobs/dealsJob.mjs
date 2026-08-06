@@ -65,9 +65,11 @@ export async function runDealsRefresh() {
       totalDeals += mapped.length;
     }
 
+    const dbTotal = await prisma.deal.count();
     console.log(
-      `[dealsJob] refresh complete — ${results.length} site(s) scanned, ${totalDeals} deal(s) stored.`,
+      `[dealsJob] refresh complete — ${results.length} site(s) scanned, ${totalDeals} deal(s) stored this run.`,
     );
+    console.log(`[dealsJob] TOTAL deals in DB: ${dbTotal}`);
   } catch (err) {
     console.error('[dealsJob] refresh failed:', err);
   }

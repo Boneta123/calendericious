@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BrandLogo } from '../../components/BrandLogo';
 import { CalendarGrid } from '../../components/CalendarGrid';
@@ -32,9 +32,13 @@ export default function CalendarHome() {
             style={styles.avatar}
             accessibilityLabel="Open profile"
           >
-            <Text style={styles.avatarText}>
-              {user?.displayName?.[0]?.toUpperCase() ?? ''}
-            </Text>
+            {user?.profilePhoto ? (
+              <Image source={{ uri: user.profilePhoto }} style={styles.avatarImage} />
+            ) : (
+              <Text style={styles.avatarText}>
+                {user?.displayName?.[0]?.toUpperCase() ?? ''}
+              </Text>
+            )}
           </Pressable>
         </View>
 
@@ -79,8 +83,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.tomato,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   avatarText: { fontFamily: fonts.display, fontSize: 20, color: '#FFFFFF' },
+  avatarImage: { width: 46, height: 46 },
   zipChip: {
     flexDirection: 'row',
     alignItems: 'center',

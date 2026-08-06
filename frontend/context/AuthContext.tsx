@@ -22,6 +22,7 @@ interface AuthContextValue {
   logIn: (input: { email: string; password: string }) => Promise<User>;
   logOut: () => void;
   updateZip: (zip: string) => void;
+  updatePhoto: (photo: string) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -44,6 +45,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
       logOut: () => setUser(null),
       updateZip: (zip) => setUser((prev) => (prev ? { ...prev, zip } : prev)),
+      updatePhoto: (photo) =>
+        setUser((prev) => (prev ? { ...prev, profilePhoto: photo } : prev)),
     }),
     [user],
   );

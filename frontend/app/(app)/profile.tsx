@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -8,7 +9,7 @@ import { RestaurantPickerModal } from '../../components/RestaurantPickerModal';
 import { ZipModal } from '../../components/ZipModal';
 import { useAuth } from '../../context/AuthContext';
 import { useRestaurantSelection } from '../../context/RestaurantSelectionContext';
-import { saveRestaurants } from '../../data/api';
+import { saveProfilePhoto, saveRestaurants } from '../../data/api';
 import { colors, fonts, radii, shadow, spacing } from '../../theme/theme';
 
 /**
@@ -17,23 +18,40 @@ import { colors, fonts, radii, shadow, spacing } from '../../theme/theme';
  * backend (notifications, favorite chains, account management).
  */
 export default function Profile() {
-  const { user, updateZip, logOut } = useAuth();
+  const { user, updateZip, updatePhoto, logOut } = useAuth();
   const { count: restaurantCount, selectedIds } = useRestaurantSelection();
   const [zipModal, setZipModal] = useState(false);
   const [restaurantModal, setRestaurantModal] = useState(false);
-  // Local only — the chosen photo is kept in memory for this session. No
-  // backend/persistence yet; it resets when the app restarts.
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  // Hydrate from the saved photo (a compressed base64 data URI returned at login).
+  const [photoUri, setPhotoUri] = useState<string | null>(user?.profilePhoto ?? null);
 
   const pickPhoto = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.8,
+      quality: 1,
     });
-    if (!result.canceled && result.assets[0]) {
-      setPhotoUri(result.assets[0].uri);
+    if (result.canceled || !result.assets[0]) return;
+
+    // Compress + resize to ~256px JPEG so the stored base64 stays small.
+    const shrunk = await manipulateAsync(
+      result.assets[0].uri,
+      [{ resize: { width: 256, height: 256 } }],
+      { compress: 0.5, format: SaveFormat.JPEG, base64: true },
+    );
+    const dataUri = `data:image/jpeg;base64,${shrunk.base64}`;
+    setPhotoUri(dataUri); // show immediately
+
+    // Persist to the DB (base64 in User.profilePhoto). Keep the local preview
+    // even if the save fails.
+    if (user) {
+      try {
+        await saveProfilePhoto(user.id, dataUri);
+        updatePhoto(dataUri); // keep it in session state
+      } catch {
+        /* non-blocking — preview stays for this session */
+      }
     }
   };
 

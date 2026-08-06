@@ -489,35 +489,49 @@ export async function scanForDeals(scrapedResults) {
       continue;
     }
 
-    // BROAD recall: capture EVERY genuine deal with a concrete redeemable value —
-    // day/time-specific, dated/limited, AND ongoing member/rewards/app-exclusive
-    // and online-only offers (e.g. KFC member deals, app-only prices, promo codes).
-    // Only pure marketing with no offer and regular full-price menu are excluded.
+    // TIME-ANCHORED only: keep deals of the day, time-of-day deals, holiday/
+    // national-day sales, dated/limited promos, and reward BONUS promos tied to a
+    // time period (earn 2x points this weekend). EXCLUDE point redemptions/purchases
+    // (spend/have N points) and evergreen perks with no day/time/date anchor.
     const system =
-      'You extract restaurant DEALS for a deals app. A deal QUALIFIES if it has a ' +
-      'CONCRETE redeemable value — a specific % off, a specific price or $ off, ' +
-      'buy-one-get-one, a free item, or a promo/coupon code that unlocks one. ' +
-      'INCLUDE all of these: deals that recur on weekday(s) ("Wing Tuesday"), ' +
-      'time-of-day/happy-hour deals, currently-running limited-time/dated promos, ' +
-      'AND ongoing offers such as member/rewards/loyalty-gated deals, app-exclusive ' +
-      'or online-only deals, sign-up offers, and promo-code discounts. ' +
-      'EXCLUDE ONLY: pure brand marketing or "new item" hype with no actual offer, ' +
-      'and standard full-price menu items. Use ONLY the provided nodes. Never invent ' +
-      'names, days, times, prices, dates, or URLs. Return strict JSON only.';
+      'You extract restaurant DEALS for a "deal of the day" app. A deal QUALIFIES only ' +
+      'if it has (a) a CONCRETE value/benefit — a specific % off, a specific price or ' +
+      '$ off, buy-one-get-one, a free item, or an EARNED bonus/reward — AND (b) a TIME ' +
+      'ANCHOR: specific weekday(s) or "today/this day", a time-of-day window, or a ' +
+      'date/date-range (holiday, seasonal, or limited-time). If a candidate has NO day, ' +
+      'time, or date anchor, OMIT it. ' +
+      'INCLUDE: item/deal of the day and weekday deals ("Taco Tuesday $1 tacos", "today ' +
+      'only 20% off"); time-of-day/happy-hour deals; HOLIDAY or NATIONAL-DAY sales with a ' +
+      'real offer ("National Pizza Day: $5 large", "July 4th: free dessert with $20"); ' +
+      'currently-running dated/limited promos; and reward/BONUS promos that GIVE something ' +
+      'tied to a time period ("double/2x/bonus points this weekend or on Tuesdays", "spend ' +
+      '$X during [period], get a $Y reward/free item"). ' +
+      'EXCLUDE: POINT REDEMPTIONS / POINT PURCHASES — anything requiring you to SPEND or ' +
+      'HAVE a number of points ("50% off for 600 points", "redeem 400 points for a free ' +
+      'drink", "use your points"); evergreen member/app perks with NO day/time/holiday/date ' +
+      'anchor ("10% off for members", "app-only $5 meal", "sign up and get a free drink"); ' +
+      'regular full-price menu; and pure marketing / "new item" hype with no offer. ' +
+      'PIVOTAL RULE: EARNING bonus points/rewards during a specific day or period is ' +
+      'INCLUDED; SPENDING or REDEEMING points for a discount is EXCLUDED. A free rewards ' +
+      'MEMBERSHIP being required is fine (requiresRewards=true) — only a required POINT ' +
+      'BALANCE/redemption disqualifies. Use ONLY the provided nodes. Never invent names, ' +
+      'days, times, prices, dates, or URLs. Return strict JSON only.';
 
     const user =
       `Restaurant homepage: ${site.url}\n` +
       `Each scraped node below carries a "pageUrl" (the exact page it was found on) and, for links, an absolute "href".\n\n` +
       `Return JSON of the form { "deals": Deal[] } where each Deal is:\n${DEAL_SHAPE_DOC}\n\n` +
       `Rules:\n` +
-      `- Include a deal if it has a CONCRETE redeemable value (a specific % off, $ off/price, BOGO, free item, or a promo/coupon code). It does NOT need a day or time — ongoing member/rewards/app/online offers COUNT. Omit only pure marketing with no offer and regular full-price menu items.\n` +
-      `- category MUST be exactly one of: "day" (recurs on weekday(s)), "time" (time-of-day window), "limited-time" (dated/limited promo OR an ongoing/evergreen offer). For an ongoing offer with no day/time/dates, use "limited-time" with daysOfWeek [] and null validFrom/validThrough.\n` +
-      `- The description MUST include the concrete value (e.g. "50% off") and the constraint (days/times/end date) as stated.\n` +
+      `- Include a deal ONLY if it has a CONCRETE value/benefit (% off, $ off/price, BOGO, free item, or an EARNED bonus/reward) AND a TIME ANCHOR: specific weekday(s) or "today/this day", a time-of-day window, OR a date/date-range (holiday/seasonal/limited). If it has NO day, time, or date anchor, OMIT it.\n` +
+      `- INCLUDE: deal-of-the-day / weekday deals, time-of-day/happy-hour deals, holiday or national-day sales with a real offer, dated/limited promos running now, and reward/BONUS promos that GIVE something during a time period ("2x/double/bonus points this weekend or on Tuesdays", "spend $X during [period], get $Y reward/free item").\n` +
+      `- EXCLUDE point redemptions / point purchases — anything requiring you to SPEND or HAVE a number of points (e.g. "50% off for 600 points", "redeem 400 points for a free drink", "use your points"). Also EXCLUDE evergreen member/app perks with no day/time/holiday/date anchor ("10% off for members", "app-only $5 meal"). EARNING bonus points during a time window is INCLUDED; SPENDING/redeeming points is EXCLUDED.\n` +
+      `- category MUST be exactly one of: "day" (weekday(s) or a specific day), "time" (time-of-day window), "limited-time" (dated/holiday/seasonal/limited promo OR a dated bonus-points period). Holiday/national-day and dated bonus periods → "limited-time" with validFrom/validThrough (or "day" if it recurs weekly). Every kept deal MUST have a non-empty daysOfWeek, a time window, OR a validFrom/validThrough date.\n` +
+      `- The description MUST include the concrete value (e.g. "50% off", "2x points") and the time anchor (days/times/holiday/date) as stated.\n` +
       `- daysOfWeek = the weekday(s) if stated, else [].\n` +
       `- Dated promos: if a promo runs a DATE RANGE (e.g. "9/16–9/20" or "now through 9/20"), set validFrom to the START ("9/16") and validThrough to the END ("9/20"). If only an end date is stated, set validThrough and leave validFrom null. Never invent a date not in the text.\n` +
       `- startTime/endTime: if a time-of-day window is stated, output BOTH ends in 24-HOUR "HH:MM" (convert "3pm"->"15:00", "11 AM"->"11:00", "3:30pm"->"15:30"). Output null ONLY when no time-of-day is stated. NEVER output am/pm text or a bare hour.\n` +
       `- sourceUrl MUST be the exact page where THIS deal appears: use that deal's node "pageUrl", or a deal-specific absolute "href" that points to the deal's own page. NEVER default to the homepage unless the deal genuinely appears on the homepage.\n` +
-      `- requiresRewards = true if a loyalty/rewards membership or the app is required to redeem (these deals ARE included).\n` +
+      `- requiresRewards = true if a free loyalty/rewards MEMBERSHIP or the app is required (that's fine, still included) — but NEVER include a deal that requires spending/having a POINT BALANCE.\n` +
       `- onlineOrderOnly = true if the deal is redeemable ONLY via online ordering, the app, or a promo/coupon code (not in-store); else false.\n` +
       `- Never guess a value, day, time, date, or URL not present in the nodes. Empty list if nothing qualifies.\n\n` +
       `Scraped nodes (JSON):\n${JSON.stringify(site.nodes)}`;

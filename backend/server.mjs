@@ -45,7 +45,9 @@ app.use(
     },
   }),
 );
-app.use(express.json());
+// 2mb so base64 profile photos fit (default 100kb is too small); compressed
+// photos are far under this, and the photo route enforces its own cap.
+app.use(express.json({ limit: '2mb' }));
 
 // Tiny request logger.
 app.use((req, _res, next) => {

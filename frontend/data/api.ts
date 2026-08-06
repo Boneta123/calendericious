@@ -125,6 +125,18 @@ export function login(input: { email: string; password: string }): Promise<AuthU
   return sendJson<AuthUser>('/api/auth/login', 'POST', input);
 }
 
+/** Save the user's profile photo (a compressed base64 data URI). */
+export function saveProfilePhoto(
+  userId: string,
+  photo: string,
+): Promise<{ profilePhoto: string | null }> {
+  return sendJson<{ profilePhoto: string | null }>(
+    `/api/users/${userId}/photo`,
+    'POST',
+    { photo },
+  );
+}
+
 /** Persist the user's chosen restaurants; returns the saved ids. */
 export function saveRestaurants(
   userId: string,
