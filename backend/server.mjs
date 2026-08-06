@@ -25,8 +25,26 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 
 // --- Core middleware -------------------------------------------------------
-// TODO: lock CORS to the app's real origin(s) once known.
-app.use(cors());
+// CORS only affects BROWSER cross-origin requests. The React Native app uses
+// native fetch (no Origin header) and is unaffected; the /admin page is
+// same-origin and unaffected. So we lock cross-origin BROWSER access to an
+// explicit allowlist from CORS_ORIGINS (comma-separated). Unset = allow none
+// (deny cross-origin), so other websites can't harvest /api/deals in a browser.
+// NOTE: CORS does NOT stop non-browser clients (curl/servers) — those need auth.
+const allowedOrigins = (process.env.CORS_ORIGINS || '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+app.use(
+  cors({
+    origin(origin, cb) {
+      // No Origin = native app / curl / same-origin → allow.
+      if (!origin) return cb(null, true);
+      // A browser cross-origin request: allow only if explicitly listed.
+      return cb(null, allowedOrigins.includes(origin));
+    },
+  }),
+);
 app.use(express.json());
 
 // Tiny request logger.

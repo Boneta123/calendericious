@@ -9,9 +9,10 @@
  * "cream menu-paper" look — and uses the food-character art from
  * frontend/assets/foodCharacters, served statically at /admin/assets.
  *
- * Protection: if process.env.ADMIN_KEY is set, both DATA routes require
- * ?key=<it> (403 otherwise). If unset, the dashboard is OPEN — a warning is
- * logged. (We read process.env only — never the .env file.) Images are public.
+ * Protection (FAIL-CLOSED): requires process.env.ADMIN_KEY to be set, and every
+ * DATA request must pass ?key=<it>. If ADMIN_KEY is UNSET the dashboard is
+ * DISABLED (503) so user PII is never served by accident; wrong key = 403.
+ * (We read process.env only — never the .env file.) Images are public.
  */
 import { fileURLToPath } from 'node:url';
 
@@ -31,11 +32,12 @@ let warned = false;
 function gate(req, res, next) {
   const key = process.env.ADMIN_KEY;
   if (!key) {
+    // FAIL-CLOSED: no key configured → the dashboard is disabled, never open.
     if (!warned) {
-      console.warn('[admin] ADMIN_KEY not set — /admin dashboard is UNPROTECTED.');
+      console.warn('[admin] ADMIN_KEY not set — /admin is DISABLED. Set ADMIN_KEY to enable it.');
       warned = true;
     }
-    return next();
+    return res.status(503).json({ error: 'Admin dashboard is disabled (ADMIN_KEY not set).' });
   }
   if (req.query.key === key) return next();
   return res.status(403).json({ error: 'Forbidden' });
