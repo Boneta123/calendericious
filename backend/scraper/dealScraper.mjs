@@ -42,9 +42,13 @@ chromium.use(stealth());
 // CONFIG
 // ===========================================================================
 
-// The OpenAI model used for the deal-extraction pass. Change this freely.
-// A small, cheap model is plenty — the input is already pre-filtered signal.
-const MODEL = "gpt-5.4-nano";
+// The OpenAI model used for the deal-extraction pass — the cost/accuracy knob.
+// RECOMMENDED: the "nano" tier under-extracts day-specific deals (it struggles
+// to reassemble a day + its offer). Step up ONE tier to the "mini" sibling of
+// the same family (e.g. gpt-5.4-mini) — still cheap, far more accurate at
+// connecting the day/time to its offer. Set that here after confirming the exact
+// model id is valid for your account.
+const MODEL = "gpt-5.4-mini";
 
 // A real desktop user-agent. Many sites serve stripped/blocked pages to
 // obvious bots; presenting a normal browser UA gets us the real content.
@@ -155,6 +159,11 @@ async function scrapeOne(browser, url) {
     const nodes = await page.evaluate(
       ({ signalSource, signalFlags }) => {
         const signal = new RegExp(signalSource, signalFlags);
+        // DAY/TIME signal — when a node names a day, time, date, or holiday we
+        // ALSO grab its local context so the day and its offer/price stay
+        // together (the #1 reason day-specific deals get missed downstream).
+        const dayTime =
+          /\b(mon|tue|wed|thu|fri|sat|sun)(day|s|nes|rs|ur)?\b|daily|weekly|every ?(day|week|mon|tue|wed|thu|fri|sat|sun)|all[- ]day|happy hour|\b\d{1,2}(:\d{2})?\s?(am|pm)\b|after \d{1,2}|\b\d{1,2}\/\d{1,2}\b|\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}\b|new year|valentine|st\.? ?patrick|easter|cinco de mayo|memorial day|independence day|4th of july|fourth of july|labor day|halloween|thanksgiving|christmas|national .{0,25}day/i;
 
         // ---- EXTRACTION CONTRACT (authoritative) ----------------------------
 
@@ -276,6 +285,22 @@ async function scrapeOne(browser, url) {
           if (aria) node.ariaLabel = aria;
           if (title) node.title = title;
           if (datetime) node.datetime = datetime;
+
+          // For DAY/TIME-signal nodes, attach LOCAL context (the offer/price
+          // usually sits in a small parent card or an adjacent sibling). Cost-
+          // controlled: only these nodes, capped ~300 chars — not whole pages.
+          if (dayTime.test(haystack)) {
+            const parentText = (el.parentElement?.textContent || '').replace(/\s+/g, ' ').trim();
+            let ctx =
+              parentText && parentText.length <= 300
+                ? parentText
+                : [el.previousElementSibling, el.nextElementSibling]
+                    .map((s) => (s?.textContent || '').replace(/\s+/g, ' ').trim())
+                    .filter(Boolean)
+                    .join(' | ');
+            ctx = ctx.slice(0, 300);
+            if (ctx && ctx !== text) node.context = ctx;
+          }
 
           // De-duplicate identical text nodes (contract rule 3).
           const key = `${tag}|${text}|${href || ''}`;
@@ -489,44 +514,42 @@ export async function scanForDeals(scrapedResults) {
       continue;
     }
 
-    // TIME-ANCHORED only: keep deals of the day, time-of-day deals, holiday/
-    // national-day sales, dated/limited promos, and reward BONUS promos tied to a
-    // time period (earn 2x points this weekend). EXCLUDE point redemptions/purchases
-    // (spend/have N points) and evergreen perks with no day/time/date anchor.
+    // DAY/TIME-SPECIFIC first: the primary target is deals tied to a day, time,
+    // date, or holiday (daily/weekly specials, happy hours, holiday sales). The
+    // offer can be a discount OR a NAMED daily/weekly/holiday special — a hard
+    // price is NOT required (that requirement was dropping real day-specific
+    // deals). Many nodes carry a "context" field with the surrounding text —
+    // use it to connect the day with its offer/price.
     const system =
-      'You extract restaurant DEALS for a "deal of the day" app. A deal QUALIFIES only ' +
-      'if it has (a) a CONCRETE value/benefit — a specific % off, a specific price or ' +
-      '$ off, buy-one-get-one, a free item, or an EARNED bonus/reward — AND (b) a TIME ' +
-      'ANCHOR: specific weekday(s) or "today/this day", a time-of-day window, or a ' +
-      'date/date-range (holiday, seasonal, or limited-time). If a candidate has NO day, ' +
-      'time, or date anchor, OMIT it. ' +
-      'INCLUDE: item/deal of the day and weekday deals ("Taco Tuesday $1 tacos", "today ' +
-      'only 20% off"); time-of-day/happy-hour deals; HOLIDAY or NATIONAL-DAY sales with a ' +
-      'real offer ("National Pizza Day: $5 large", "July 4th: free dessert with $20"); ' +
-      'currently-running dated/limited promos; and reward/BONUS promos that GIVE something ' +
-      'tied to a time period ("double/2x/bonus points this weekend or on Tuesdays", "spend ' +
-      '$X during [period], get a $Y reward/free item"). ' +
-      'EXCLUDE: POINT REDEMPTIONS / POINT PURCHASES — anything requiring you to SPEND or ' +
-      'HAVE a number of points ("50% off for 600 points", "redeem 400 points for a free ' +
-      'drink", "use your points"); evergreen member/app perks with NO day/time/holiday/date ' +
-      'anchor ("10% off for members", "app-only $5 meal", "sign up and get a free drink"); ' +
-      'regular full-price menu; and pure marketing / "new item" hype with no offer. ' +
-      'PIVOTAL RULE: EARNING bonus points/rewards during a specific day or period is ' +
-      'INCLUDED; SPENDING or REDEEMING points for a discount is EXCLUDED. A free rewards ' +
-      'MEMBERSHIP being required is fine (requiresRewards=true) — only a required POINT ' +
-      'BALANCE/redemption disqualifies. Use ONLY the provided nodes. Never invent names, ' +
-      'days, times, prices, dates, or URLs. Return strict JSON only.';
+      'You extract DAY- and TIME-SPECIFIC restaurant deals for a "deal of the day" app. ' +
+      'The REQUIREMENT is a TIME ANCHOR: specific weekday(s), "daily/every ___", "today/this day", ' +
+      'a time-of-day/happy-hour window, a specific date, or a holiday/national-day. If a ' +
+      'candidate has NO day, time, date, or holiday anchor, OMIT it. ' +
+      'Given a time anchor, the offer can be a % off, a $ off/price, BOGO, a free item, OR a ' +
+      'NAMED recurring/holiday special — a hard numeric price is NOT required. Keep clearly ' +
+      'day/time-anchored specials even if the exact value is soft or implied. ' +
+      'INCLUDE (examples): weekday specials ("Taco Tuesday", "Wing Wednesday 60c wings", "Kids ' +
+      'Eat Free on Sundays"); time-of-day deals ("Happy Hour 3-6pm half-price apps", "after 10pm"); ' +
+      'holiday/national-day offers ("National Coffee Day: free coffee", "July 4th: free dessert with $20"); ' +
+      'dated/limited promos running now; and reward BONUS promos tied to a period ("2x/double points this weekend"). ' +
+      'EXCLUDE: anything with NO day/time/date/holiday anchor (evergreen "10% off for members", ' +
+      '"app-only $5 meal", "sign up and get a free drink", regular full-price menu, "new item" hype); ' +
+      'and POINT REDEMPTIONS / PURCHASES — requiring you to SPEND or HAVE points ("50% off for 600 ' +
+      'points", "redeem 400 points"). EARNING bonus points during a specific day/period is INCLUDED; ' +
+      'SPENDING points is EXCLUDED. A free rewards MEMBERSHIP requirement is fine (requiresRewards=true); ' +
+      'only a required POINT BALANCE disqualifies. Read each node\'s text AND its "context". Use ONLY ' +
+      'the provided nodes. Never invent names, days, times, prices, dates, or URLs. Return strict JSON only.';
 
     const user =
       `Restaurant homepage: ${site.url}\n` +
-      `Each scraped node below carries a "pageUrl" (the exact page it was found on) and, for links, an absolute "href".\n\n` +
+      `Each scraped node below carries a "pageUrl" (the page it was found on), a "context" field for day/time nodes (the surrounding text — use it to connect the day with its offer/price), and, for links, an absolute "href".\n\n` +
       `Return JSON of the form { "deals": Deal[] } where each Deal is:\n${DEAL_SHAPE_DOC}\n\n` +
       `Rules:\n` +
-      `- Include a deal ONLY if it has a CONCRETE value/benefit (% off, $ off/price, BOGO, free item, or an EARNED bonus/reward) AND a TIME ANCHOR: specific weekday(s) or "today/this day", a time-of-day window, OR a date/date-range (holiday/seasonal/limited). If it has NO day, time, or date anchor, OMIT it.\n` +
-      `- INCLUDE: deal-of-the-day / weekday deals, time-of-day/happy-hour deals, holiday or national-day sales with a real offer, dated/limited promos running now, and reward/BONUS promos that GIVE something during a time period ("2x/double/bonus points this weekend or on Tuesdays", "spend $X during [period], get $Y reward/free item").\n` +
-      `- EXCLUDE point redemptions / point purchases — anything requiring you to SPEND or HAVE a number of points (e.g. "50% off for 600 points", "redeem 400 points for a free drink", "use your points"). Also EXCLUDE evergreen member/app perks with no day/time/holiday/date anchor ("10% off for members", "app-only $5 meal"). EARNING bonus points during a time window is INCLUDED; SPENDING/redeeming points is EXCLUDED.\n` +
+      `- The REQUIREMENT is a TIME ANCHOR: specific weekday(s), "daily/every ___", "today/this day", a time-of-day/happy-hour window, a specific date, or a holiday/national-day. If a candidate has NO day/time/date/holiday anchor, OMIT it.\n` +
+      `- Given a time anchor, the offer can be a % off, $ off/price, BOGO, a free item, OR a NAMED recurring/holiday special — a hard numeric price is NOT required. KEEP clearly day/time-anchored specials even when the exact value is soft/implied (e.g. "Taco Tuesday", "Kids Eat Free Sundays", "Wing Wednesday", "Happy Hour 3-6pm", "Free coffee on National Coffee Day").\n` +
+      `- EXCLUDE anything with NO day/time/date/holiday anchor (evergreen "10% off for members", "app-only $5 meal", "sign up and get a free drink", regular full-price menu, "new item" hype). EXCLUDE point redemptions/purchases — requiring you to SPEND or HAVE points ("50% off for 600 points", "redeem 400 points"). EARNING bonus points during a specific day/period is INCLUDED; SPENDING points is EXCLUDED.\n` +
       `- category MUST be exactly one of: "day" (weekday(s) or a specific day), "time" (time-of-day window), "limited-time" (dated/holiday/seasonal/limited promo OR a dated bonus-points period). Holiday/national-day and dated bonus periods → "limited-time" with validFrom/validThrough (or "day" if it recurs weekly). Every kept deal MUST have a non-empty daysOfWeek, a time window, OR a validFrom/validThrough date.\n` +
-      `- The description MUST include the concrete value (e.g. "50% off", "2x points") and the time anchor (days/times/holiday/date) as stated.\n` +
+      `- The description MUST state the offer (the value if given, e.g. "50% off"/"$1 tacos", else the named special e.g. "Taco Tuesday") AND the time anchor (day/time/holiday/date) as stated.\n` +
       `- daysOfWeek = the weekday(s) if stated, else [].\n` +
       `- Dated promos: if a promo runs a DATE RANGE (e.g. "9/16–9/20" or "now through 9/20"), set validFrom to the START ("9/16") and validThrough to the END ("9/20"). If only an end date is stated, set validThrough and leave validFrom null. Never invent a date not in the text.\n` +
       `- startTime/endTime: if a time-of-day window is stated, output BOTH ends in 24-HOUR "HH:MM" (convert "3pm"->"15:00", "11 AM"->"11:00", "3:30pm"->"15:30"). Output null ONLY when no time-of-day is stated. NEVER output am/pm text or a bare hour.\n` +
