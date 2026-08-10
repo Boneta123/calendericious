@@ -13,6 +13,28 @@
  * the backend is refreshed (`npm run server` + `npm run refresh`).
  */
 import Constants from 'expo-constants';
+import * as SecureStore from 'expo-secure-store';
+
+// --- Session token (kept in the device keychain via SecureStore) ------------
+const TOKEN_KEY = 'sessionToken';
+let authToken: string | null = null;
+
+async function persistToken(token: string) {
+  authToken = token;
+  try {
+    await SecureStore.setItemAsync(TOKEN_KEY, token);
+  } catch {
+    /* keychain unavailable — token still works for this session */
+  }
+}
+async function clearToken() {
+  authToken = null;
+  try {
+    await SecureStore.deleteItemAsync(TOKEN_KEY);
+  } catch {
+    /* ignore */
+  }
+}
 
 const API_PORT = 4000;
 
@@ -97,12 +119,13 @@ export interface AuthUser {
 }
 
 /** POST/PUT JSON helper — throws an Error carrying the server's `error` on non-2xx. */
-async function sendJson<T>(path: string, method: string, body: unknown): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+async function sendJson<T>(path: string, method: string, body?: unknown): Promise<T> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (authToken) headers.Authorization = `Bearer ${authToken}`;
+  const init: RequestInit = { method, headers };
+  if (method !== 'GET' && body !== undefined) init.body = JSON.stringify(body);
+
+  const res = await fetch(`${API_BASE}${path}`, init);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error((data && (data as { error?: string }).error) || `Request failed (${res.status})`);
@@ -111,18 +134,52 @@ async function sendJson<T>(path: string, method: string, body: unknown): Promise
 }
 
 /** Create an account. Email is the login identity; displayName is shown. */
-export function createAccount(input: {
+type AuthResponse = AuthUser & { token: string };
+
+export async function createAccount(input: {
   displayName: string;
   email: string;
   password: string;
   zip: string;
 }): Promise<AuthUser> {
-  return sendJson<AuthUser>('/api/users', 'POST', input);
+  const data = await sendJson<AuthResponse>('/api/users', 'POST', input);
+  await persistToken(data.token);
+  return data;
 }
 
-/** Log in with email + password. */
-export function login(input: { email: string; password: string }): Promise<AuthUser> {
-  return sendJson<AuthUser>('/api/auth/login', 'POST', input);
+/** Log in with email + password; stores the session token. */
+export async function login(input: { email: string; password: string }): Promise<AuthUser> {
+  const data = await sendJson<AuthResponse>('/api/auth/login', 'POST', input);
+  await persistToken(data.token);
+  return data;
+}
+
+/** Log out — revoke the session server-side and clear the local token. */
+export async function logout(): Promise<void> {
+  try {
+    await sendJson('/api/auth/logout', 'POST', {});
+  } catch {
+    /* revoke best-effort; still clear locally */
+  }
+  await clearToken();
+}
+
+/** Restore a saved session on app launch (token → current user), or null. */
+export async function restoreSession(): Promise<AuthUser | null> {
+  let token: string | null = null;
+  try {
+    token = await SecureStore.getItemAsync(TOKEN_KEY);
+  } catch {
+    token = null;
+  }
+  if (!token) return null;
+  authToken = token;
+  try {
+    return await sendJson<AuthUser>('/api/auth/me', 'GET');
+  } catch {
+    await clearToken(); // token invalid/expired
+    return null;
+  }
 }
 
 /** Request a password-reset code by email. Always resolves (generic response). */

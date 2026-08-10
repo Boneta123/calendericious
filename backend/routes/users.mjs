@@ -10,6 +10,8 @@ import { Router } from 'express';
 import { prisma } from '../db.mjs';
 import { sendPasswordResetEmail } from '../lib/email.mjs';
 import { hashPassword, verifyPassword } from '../lib/password.mjs';
+import { createSession, destroySession } from '../lib/session.mjs';
+import { auth } from '../middleware/auth.mjs';
 import { rateLimit } from '../middleware/rateLimit.mjs';
 
 const router = Router();
@@ -61,7 +63,8 @@ router.post('/users', signupLimiter, async (req, res, next) => {
         zip: zip.trim(),
       },
     });
-    res.json(safeUser(user, []));
+    const token = await createSession(user.id);
+    res.json({ ...safeUser(user, []), token });
   } catch (err) {
     // Prisma unique-constraint violation on email.
     if (err && err.code === 'P2002') {
@@ -88,7 +91,33 @@ router.post('/auth/login', loginLimiter, async (req, res, next) => {
     // Record the login for the admin dashboard (fire-and-forget is fine).
     await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
     const restaurantIds = user.restaurants.map((r) => r.restaurantId);
-    res.json(safeUser(user, restaurantIds));
+    const token = await createSession(user.id);
+    res.json({ ...safeUser(user, restaurantIds), token });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Current session's user (used to restore the session on app launch).
+router.get('/auth/me', auth, async (req, res, next) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      include: { restaurants: { select: { restaurantId: true } } },
+    });
+    if (!user) return res.status(401).json({ error: 'Not authenticated.' });
+    res.json(safeUser(user, user.restaurants.map((r) => r.restaurantId)));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Log out — delete this session's token.
+router.post('/auth/logout', auth, async (req, res, next) => {
+  try {
+    const h = req.headers.authorization || '';
+    await destroySession(h.startsWith('Bearer ') ? h.slice(7).trim() : null);
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }

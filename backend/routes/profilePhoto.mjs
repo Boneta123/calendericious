@@ -7,15 +7,23 @@
 import { Router } from 'express';
 
 import { prisma } from '../db.mjs';
-import { auth } from '../middleware/auth.mjs';
+import { auth, requireSelf } from '../middleware/auth.mjs';
+import { rateLimit } from '../middleware/rateLimit.mjs';
 
 const router = Router();
 
 // Safety cap: compressed photos are tens of KB; reject anything suspiciously big.
 const MAX_PHOTO_CHARS = 1_500_000; // ~1.1MB of image after base64 overhead
 
+// Per-IP rate limit on the photo endpoints (prevents spamming photo writes/reads).
+const photoLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: 'Too many photo requests. Please try again later.',
+});
+
 // Get the user's profile photo (data URI or null).
-router.get('/users/:id/photo', auth, async (req, res, next) => {
+router.get('/users/:id/photo', photoLimiter, auth, requireSelf, async (req, res, next) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.params.id },
@@ -29,7 +37,7 @@ router.get('/users/:id/photo', auth, async (req, res, next) => {
 });
 
 // Set the user's profile photo. body: { photo: "data:image/jpeg;base64,..." }
-router.post('/users/:id/photo', auth, async (req, res, next) => {
+router.post('/users/:id/photo', photoLimiter, auth, requireSelf, async (req, res, next) => {
   try {
     const photo = req.body?.photo;
     if (typeof photo !== 'string' || !/^data:image\/[a-z0-9.+-]+;base64,/i.test(photo)) {

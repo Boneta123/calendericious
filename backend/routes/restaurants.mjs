@@ -7,7 +7,7 @@
 import { Router } from 'express';
 
 import { prisma } from '../db.mjs';
-import { auth } from '../middleware/auth.mjs';
+import { auth, requireSelf } from '../middleware/auth.mjs';
 
 const router = Router();
 
@@ -24,7 +24,7 @@ router.get('/restaurants', async (_req, res, next) => {
 });
 
 // Replace the user's selected restaurants. body: { restaurantIds: string[] }
-router.put('/users/:id/restaurants', auth, async (req, res, next) => {
+router.put('/users/:id/restaurants', auth, requireSelf, async (req, res, next) => {
   try {
     const userId = req.params.id;
     const requested = Array.isArray(req.body?.restaurantIds) ? req.body.restaurantIds : [];

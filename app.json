@@ -41,7 +41,8 @@
         {
           "photosPermission": "Allow Calendericious to access your photos so you can set a profile picture."
         }
-      ]
+      ],
+      "expo-secure-store"
     ]
   }
 }

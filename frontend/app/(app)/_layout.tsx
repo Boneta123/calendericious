@@ -4,7 +4,8 @@ import { colors } from '../../theme/theme';
 
 /** Guards the authed area — kicks back to login when there's no user. */
 export default function AppLayout() {
-  const { user } = useAuth();
+  const { user, initializing } = useAuth();
+  if (initializing) return null; // wait for session restore before guarding
   if (!user) return <Redirect href="/(auth)/login" />;
 
   return (

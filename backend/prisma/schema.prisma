@@ -40,6 +40,7 @@ model User {
   resetCodeExpiresAt DateTime? // when the reset code expires (~15 min)
 
   restaurants UserRestaurant[]
+  sessions    Session[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -62,6 +63,19 @@ model Restaurant {
 }
 
 /// A user's selected restaurants — explicit many-to-many join.
+/// A login session. We store only the HASH of the opaque bearer token, so a DB
+/// leak can't be used to impersonate anyone. Deleted on logout / when expired.
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique // sha256 of the token the client holds
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([userId])
+}
+
 model UserRestaurant {
   userId       String
   restaurantId String
