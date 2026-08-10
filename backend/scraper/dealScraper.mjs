@@ -465,15 +465,18 @@ export async function scrapeSites(urls) {
 const DEAL_SHAPE_DOC = `{
   "restaurant": string,
   "dealName": string,          // main deal name, e.g. "3 for Me"
-  "description": string,
-  "category": string,          // one of: day | time | limited-time
+  "item": string,              // the SPECIFIC named item(s) the deal is on, e.g. "Italian B.M.T. footlong"; never generic ("sub") when the source names it; never empty
+  "description": string,       // full deal: offer value + named item + time anchor + location
+  "category": string,          // one of: day | time | limited-time | birthday
   "daysOfWeek": string[],      // e.g. ["Mon","Tue"]; [] if not day-of-week based
   "startTime": string | null,  // time-of-day start, e.g. "15:00" or "3pm"; null if none
   "endTime": string | null,    // time-of-day end; null if none
   "validFrom": string | null,  // START date of a dated/limited promo (e.g. "9/16" of a 9/16–9/20 run); null otherwise
   "validThrough": string | null, // END date for limited-time promos, e.g. "8/2" or "9/20"; null otherwise
-  "requiresRewards": boolean,  // loyalty/rewards/app membership required?
+  "requiresRewards": boolean,  // loyalty/rewards/app membership required? (fine — only a POINTS mechanic disqualifies)
   "onlineOrderOnly": boolean,  // redeemable ONLY via online/app/promo-code order (not in-store)?
+  "birthdayWindow": string | null, // ONLY for category "birthday": "day" (on your birthday), "week" (birthday week), or "month" (birthday month); null otherwise
+  "location": string,          // where it applies: specific branch/city/address if stated, else "Participating <Restaurant> locations"; NEVER empty
   "sourceUrl": string
 }`;
 
@@ -528,33 +531,54 @@ export async function scanForDeals(scrapedResults) {
       'Given a time anchor, the offer can be a % off, a $ off/price, BOGO, a free item, OR a ' +
       'NAMED recurring/holiday special — a hard numeric price is NOT required. Keep clearly ' +
       'day/time-anchored specials even if the exact value is soft or implied. ' +
-      'INCLUDE (examples): weekday specials ("Taco Tuesday", "Wing Wednesday 60c wings", "Kids ' +
-      'Eat Free on Sundays"); time-of-day deals ("Happy Hour 3-6pm half-price apps", "after 10pm"); ' +
+      'EVERY kept deal MUST specify all THREE, or you MUST omit it: (a) ITEM — the exact menu ' +
+      'item the deal is on, named in full as the source states it (if the source says "$6.99 ' +
+      'Italian B.M.T. footlong", item is "Italian B.M.T. footlong", NOT "sub"; only use a generic ' +
+      'term like "any sub" when the source itself is generic; never leave item blank); (b) a TIME ' +
+      'anchor (day, time window, date, or holiday); (c) LOCATION — specific branch/city/address if ' +
+      'stated, else "Participating <Restaurant> locations" (never blank). The description MUST read ' +
+      'as a complete deal: offer value + named item + time anchor + location, e.g. "$6.99 Italian ' +
+      'B.M.T. footlong, all day Monday, at participating Subway locations". ' +
+      'INCLUDE (examples): weekday specials ("Taco Tuesday $1 tacos", "Wing Wednesday 60c wings", ' +
+      '"Kids Eat Free on Sundays"); time-of-day deals ("Happy Hour 3-6pm half-price apps"); ' +
       'holiday/national-day offers ("National Coffee Day: free coffee", "July 4th: free dessert with $20"); ' +
-      'dated/limited promos running now; and reward BONUS promos tied to a period ("2x/double points this weekend"). ' +
+      'dated/limited discount promos running now. ' +
+      'BIRTHDAY freebies ARE a valid TIME ANCHOR (the customer\'s birthday): a free or discounted item ' +
+      'tied to the birthday ("free birthday dessert", "free entrée on your birthday", "birthday month: ' +
+      'free drink"). For these set category="birthday" and birthdayWindow to the stated span: the ' +
+      'birthday DAY -> "day", the birthday WEEK -> "week", the birthday MONTH -> "month" (default "day" ' +
+      'if only "on your birthday" is stated). Birthday freebies still need an item + location; a rewards/app ' +
+      'signup to claim the birthday reward is fine (requiresRewards=true) — a POINTS balance is not. ' +
+      'REWARDS/loyalty/app promos: INCLUDE one ONLY if the offer itself is a concrete monetary deal ' +
+      '— a % or $ discount, a set price, BOGO, or a free item. EXCLUDE EVERY points-based promo in ' +
+      'BOTH directions: EARNING points ("2x/double points", "bonus points", "earn 500 points") is ' +
+      'EXCLUDED, and SPENDING/redeeming/having points ("50% off for 600 points", "redeem 400 points") ' +
+      'is EXCLUDED. Requiring a free rewards MEMBERSHIP or the app to GET a discount/BOGO/free item is ' +
+      'still fine (requiresRewards=true) — only the POINTS mechanic disqualifies. ' +
       'EXCLUDE: anything with NO day/time/date/holiday anchor (evergreen "10% off for members", ' +
-      '"app-only $5 meal", "sign up and get a free drink", regular full-price menu, "new item" hype); ' +
-      'and POINT REDEMPTIONS / PURCHASES — requiring you to SPEND or HAVE points ("50% off for 600 ' +
-      'points", "redeem 400 points"). EARNING bonus points during a specific day/period is INCLUDED; ' +
-      'SPENDING points is EXCLUDED. A free rewards MEMBERSHIP requirement is fine (requiresRewards=true); ' +
-      'only a required POINT BALANCE disqualifies. Read each node\'s text AND its "context". Use ONLY ' +
-      'the provided nodes. Never invent names, days, times, prices, dates, or URLs. Return strict JSON only.';
+      '"app-only $5 meal", "sign up and get a free drink", regular full-price menu, "new item" hype). ' +
+      'Read each node\'s text AND its "context". Use ONLY the provided nodes. Never invent items, ' +
+      'names, days, times, prices, dates, locations, or URLs. Return strict JSON only.';
 
     const user =
       `Restaurant homepage: ${site.url}\n` +
       `Each scraped node below carries a "pageUrl" (the page it was found on), a "context" field for day/time nodes (the surrounding text — use it to connect the day with its offer/price), and, for links, an absolute "href".\n\n` +
       `Return JSON of the form { "deals": Deal[] } where each Deal is:\n${DEAL_SHAPE_DOC}\n\n` +
       `Rules:\n` +
-      `- The REQUIREMENT is a TIME ANCHOR: specific weekday(s), "daily/every ___", "today/this day", a time-of-day/happy-hour window, a specific date, or a holiday/national-day. If a candidate has NO day/time/date/holiday anchor, OMIT it.\n` +
+      `- The REQUIREMENT is a TIME ANCHOR: specific weekday(s), "daily/every ___", "today/this day", a time-of-day/happy-hour window, a specific date, a holiday/national-day, OR the customer's BIRTHDAY. If a candidate has NO such anchor, OMIT it.\n` +
       `- Given a time anchor, the offer can be a % off, $ off/price, BOGO, a free item, OR a NAMED recurring/holiday special — a hard numeric price is NOT required. KEEP clearly day/time-anchored specials even when the exact value is soft/implied (e.g. "Taco Tuesday", "Kids Eat Free Sundays", "Wing Wednesday", "Happy Hour 3-6pm", "Free coffee on National Coffee Day").\n` +
-      `- EXCLUDE anything with NO day/time/date/holiday anchor (evergreen "10% off for members", "app-only $5 meal", "sign up and get a free drink", regular full-price menu, "new item" hype). EXCLUDE point redemptions/purchases — requiring you to SPEND or HAVE points ("50% off for 600 points", "redeem 400 points"). EARNING bonus points during a specific day/period is INCLUDED; SPENDING points is EXCLUDED.\n` +
-      `- category MUST be exactly one of: "day" (weekday(s) or a specific day), "time" (time-of-day window), "limited-time" (dated/holiday/seasonal/limited promo OR a dated bonus-points period). Holiday/national-day and dated bonus periods → "limited-time" with validFrom/validThrough (or "day" if it recurs weekly). Every kept deal MUST have a non-empty daysOfWeek, a time window, OR a validFrom/validThrough date.\n` +
-      `- The description MUST state the offer (the value if given, e.g. "50% off"/"$1 tacos", else the named special e.g. "Taco Tuesday") AND the time anchor (day/time/holiday/date) as stated.\n` +
+      `- EVERY kept deal MUST specify all THREE or you MUST OMIT it: (a) item — the exact menu item, named in full as the source states it ("$6.99 Italian B.M.T. footlong" → item "Italian B.M.T. footlong", never "sub"; only use a generic term like "any sub" when the source itself is generic); (b) a time anchor; (c) location — specific branch/city/address if stated, else "Participating <Restaurant> locations". Never leave item or location blank.\n` +
+      `- REWARDS/loyalty/app promos: INCLUDE one ONLY if the offer itself is a concrete monetary deal — a % or $ discount, a set price, BOGO, or a free item. EXCLUDE EVERY points-based promo in BOTH directions: EARNING points ("2x/double points", "bonus points", "earn 500 points") is EXCLUDED; SPENDING/redeeming/having points ("50% off for 600 points", "redeem 400 points") is EXCLUDED. Requiring a free rewards MEMBERSHIP or the app to GET a discount/BOGO/free item is fine (requiresRewards=true) — only the POINTS mechanic disqualifies.\n` +
+      `- EXCLUDE anything with NO day/time/date/holiday anchor (evergreen "10% off for members", "app-only $5 meal", "sign up and get a free drink", regular full-price menu, "new item" hype).\n` +
+      `- category MUST be exactly one of: "day" (weekday(s) or a specific day), "time" (time-of-day window), "limited-time" (dated/holiday/seasonal/limited promo), or "birthday" (a free/discounted item tied to the customer's birthday). Holiday/national-day and dated promos → "limited-time" with validFrom/validThrough (or "day" if it recurs weekly). Every kept deal MUST have EITHER a non-empty daysOfWeek, a time window, a validFrom/validThrough date, OR category "birthday".\n` +
+      `- BIRTHDAY deals: set category "birthday" and birthdayWindow to "day" (only on the birthday), "week" (birthday week), or "month" (birthday month) — default "day" if only "on your birthday" is stated. daysOfWeek/startTime/endTime/validFrom/validThrough stay empty/null for birthday deals. birthdayWindow MUST be null for every non-birthday deal.\n` +
+      `- The description MUST read as a complete deal: the offer value (e.g. "50% off"/"$1 tacos", else the named special e.g. "Taco Tuesday"), the named item, the time anchor (day/time/holiday/date), AND the location — as stated.\n` +
+      `- item = the specific named menu item(s) the deal applies to, in full. location = specific branch/city/address if stated, else "Participating <Restaurant> locations". Neither may be empty.\n` +
       `- daysOfWeek = the weekday(s) if stated, else [].\n` +
       `- Dated promos: if a promo runs a DATE RANGE (e.g. "9/16–9/20" or "now through 9/20"), set validFrom to the START ("9/16") and validThrough to the END ("9/20"). If only an end date is stated, set validThrough and leave validFrom null. Never invent a date not in the text.\n` +
       `- startTime/endTime: if a time-of-day window is stated, output BOTH ends in 24-HOUR "HH:MM" (convert "3pm"->"15:00", "11 AM"->"11:00", "3:30pm"->"15:30"). Output null ONLY when no time-of-day is stated. NEVER output am/pm text or a bare hour.\n` +
       `- sourceUrl MUST be the exact page where THIS deal appears: use that deal's node "pageUrl", or a deal-specific absolute "href" that points to the deal's own page. NEVER default to the homepage unless the deal genuinely appears on the homepage.\n` +
-      `- requiresRewards = true if a free loyalty/rewards MEMBERSHIP or the app is required (that's fine, still included) — but NEVER include a deal that requires spending/having a POINT BALANCE.\n` +
+      `- requiresRewards = true if a free loyalty/rewards MEMBERSHIP or the app is required to get the discount/BOGO/free item (that's fine, still included) — but NEVER include any points-based promo: not EARNING points (2x/bonus points) and not SPENDING/having a POINT BALANCE.\n` +
       `- onlineOrderOnly = true if the deal is redeemable ONLY via online ordering, the app, or a promo/coupon code (not in-store); else false.\n` +
       `- Never guess a value, day, time, date, or URL not present in the nodes. Empty list if nothing qualifies.\n\n` +
       `Scraped nodes (JSON):\n${JSON.stringify(site.nodes)}`;
@@ -573,6 +597,26 @@ export async function scanForDeals(scrapedResults) {
       const raw = completion.choices?.[0]?.message?.content || '{}';
       const parsed = JSON.parse(raw);
       deals = Array.isArray(parsed.deals) ? parsed.deals : [];
+
+      // Safety net (in addition to the prompt): DROP any deal missing a named
+      // item, a time anchor, or a location. A time anchor = at least one of a
+      // non-empty daysOfWeek, a startTime, an endTime, a validFrom, a
+      // validThrough, OR category "birthday" (the birthday itself IS the anchor).
+      // Item and location must be non-empty strings.
+      const hasText = (v) => typeof v === 'string' && v.trim().length > 0;
+      deals = deals.filter((d) => {
+        const hasItem = hasText(d.item);
+        const hasLocation = hasText(d.location);
+        const isBirthday = String(d.category || '').toLowerCase() === 'birthday';
+        const hasTimeAnchor =
+          isBirthday ||
+          (Array.isArray(d.daysOfWeek) && d.daysOfWeek.length > 0) ||
+          hasText(d.startTime) ||
+          hasText(d.endTime) ||
+          hasText(d.validFrom) ||
+          hasText(d.validThrough);
+        return hasItem && hasLocation && hasTimeAnchor;
+      });
     } catch (err) {
       console.log(`\n=== ${site.url} ===\n  AI scan failed: ${String(err && err.message ? err.message : err)}`);
       continue;
@@ -589,6 +633,7 @@ export async function scanForDeals(scrapedResults) {
           d.startTime || d.endTime ? `${d.startTime || '?'}–${d.endTime || '?'}` : '—';
         console.log(
           `  • [${d.category || '?'}] ${d.dealName || '(unnamed)'} @ ${d.restaurant || '(restaurant?)'}\n` +
+            `      item: ${d.item || '—'} | location: ${d.location || '—'}\n` +
             `      days: ${days} | time: ${time} | thru: ${d.validThrough || '—'}\n` +
             `      rewards required: ${d.requiresRewards ? 'YES' : 'no'}\n` +
             `      ${d.description || ''}`,

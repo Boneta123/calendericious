@@ -18,7 +18,7 @@ import { useRestaurantSelection } from '../../context/RestaurantSelectionContext
 import { saveRestaurants } from '../../data/api';
 import { pickRandom } from '../../data/restaurants';
 import { colors, fonts, spacing } from '../../theme/theme';
-import { isValidUsZip, sanitizeZipInput } from '../../utils/zip';
+import { isValidBirthday, sanitizeBirthdayInput, toStoredBirthday } from '../../utils/birthday';
 
 export default function SignUp() {
   const { signUp, user } = useAuth();
@@ -27,7 +27,7 @@ export default function SignUp() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [zip, setZip] = useState('');
+  const [birthday, setBirthday] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   // After the account is created, gate entry behind picking ≥1 restaurant.
@@ -41,14 +41,19 @@ export default function SignUp() {
     if (password.length <= 7 || !/[^A-Za-z0-9]/.test(password))
       next.password = 'Must be more than 7 characters and include a special character.';
     if (confirmPassword !== password) next.confirmPassword = 'Passwords do not match.';
-    if (!isValidUsZip(zip)) next.zip = 'Enter a valid 5-digit US ZIP code.';
+    if (!isValidBirthday(birthday)) next.birthday = 'Enter your birthday as MM/DD.';
     setErrors(next);
     if (Object.keys(next).length > 0) return;
 
     // Create the account; only show onboarding once the server confirms it.
     setSubmitting(true);
     try {
-      await signUp({ email, password, displayName: displayName.trim(), zip });
+      await signUp({
+        email,
+        password,
+        displayName: displayName.trim(),
+        birthday: toStoredBirthday(birthday),
+      });
       setShowOnboarding(true);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Could not create account.';
@@ -90,7 +95,7 @@ export default function SignUp() {
             <BrandLogo width={300} />
             <Text style={styles.title}>Claim a seat at the table.</Text>
             <Text style={styles.sub}>
-              Create an account and we'll surface the tastiest deals near your ZIP.
+              Create an account and we'll surface the tastiest deals — plus birthday treats when your day rolls around.
             </Text>
           </View>
 
@@ -131,13 +136,14 @@ export default function SignUp() {
             error={errors.confirmPassword}
           />
           <TextField
-            label="US ZIP code"
-            value={zip}
-            onChangeText={(t) => setZip(sanitizeZipInput(t))}
-            placeholder="10001"
+            label="Birthday (MM/DD)"
+            value={birthday}
+            onChangeText={(t) => setBirthday(sanitizeBirthdayInput(t))}
+            placeholder="07/04"
             keyboardType="number-pad"
             maxLength={5}
-            error={errors.zip}
+            error={errors.birthday}
+            helper="Used to unlock birthday deals — month and day only."
             mono
           />
 

@@ -5,14 +5,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BrandLogo } from '../../components/BrandLogo';
 import { CalendarGrid } from '../../components/CalendarGrid';
 import { FoodScatter } from '../../components/FoodScatter';
-import { ZipModal } from '../../components/ZipModal';
+import { BirthdayModal } from '../../components/BirthdayModal';
 import { useAuth } from '../../context/AuthContext';
 import { colors, fonts, radii, shadow, spacing } from '../../theme/theme';
+import { formatBirthday } from '../../utils/birthday';
 import { toDateKey } from '../../utils/date';
 
 export default function CalendarHome() {
-  const { user, updateZip } = useAuth();
-  const [zipModal, setZipModal] = useState(false);
+  const { user, updateBirthday } = useAuth();
+  const [birthdayModal, setBirthdayModal] = useState(false);
 
   const openDay = (date: Date) => router.push(`/(app)/day/${toDateKey(date)}`);
 
@@ -21,7 +22,7 @@ export default function CalendarHome() {
       <FoodScatter />
       <View style={styles.content}>
         <BrandLogo width={150} style={{ marginBottom: spacing.md }} />
-        {/* Greeting + ZIP chip */}
+        {/* Greeting + birthday chip */}
         <View style={styles.topRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.hello}>Hey {user?.displayName}</Text>
@@ -43,13 +44,14 @@ export default function CalendarHome() {
         </View>
 
         <Pressable
-          onPress={() => setZipModal(true)}
-          style={[styles.zipChip, shadow.soft]}
-          accessibilityLabel="Change ZIP code"
+          onPress={() => setBirthdayModal(true)}
+          style={[styles.birthdayChip, shadow.soft]}
+          accessibilityLabel="Change your birthday"
         >
-          <Text style={styles.zipPin}>📍</Text>
-          <Text style={styles.zipText}>Deals near {user?.zip}</Text>
-          <Text style={styles.zipChange}>Change</Text>
+          <Text style={styles.birthdayText}>
+            {user?.birthday ? `Birthday ${formatBirthday(user.birthday)}` : 'Add your birthday'}
+          </Text>
+          <Text style={styles.birthdayChange}>Change</Text>
         </Pressable>
 
         <CalendarGrid onSelectDay={openDay} />
@@ -64,11 +66,11 @@ export default function CalendarHome() {
         </Text>
       </View>
 
-      <ZipModal
-        visible={zipModal}
-        currentZip={user?.zip ?? ''}
-        onClose={() => setZipModal(false)}
-        onSave={updateZip}
+      <BirthdayModal
+        visible={birthdayModal}
+        currentBirthday={user?.birthday ?? ''}
+        onClose={() => setBirthdayModal(false)}
+        onSave={updateBirthday}
       />
     </SafeAreaView>
   );
@@ -91,7 +93,7 @@ const styles = StyleSheet.create({
   },
   avatarText: { fontFamily: fonts.display, fontSize: 20, color: '#FFFFFF' },
   avatarImage: { width: 46, height: 46 },
-  zipChip: {
+  birthdayChip: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.card,
@@ -100,9 +102,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.lg,
   },
-  zipPin: { fontSize: 16, marginRight: spacing.sm },
-  zipText: { flex: 1, fontFamily: fonts.bodyBold, fontSize: 15, color: colors.ink },
-  zipChange: {
+  birthdayText: { flex: 1, fontFamily: fonts.bodyBold, fontSize: 15, color: colors.ink },
+  birthdayChange: {
     fontFamily: fonts.bodyBold,
     fontSize: 13,
     color: colors.tomato,

@@ -18,7 +18,7 @@ import dealsRouter from './routes/deals.mjs';
 import profilePhotoRouter from './routes/profilePhoto.mjs';
 import restaurantsRouter from './routes/restaurants.mjs';
 import usersRouter from './routes/users.mjs';
-import zipRouter from './routes/zip.mjs';
+import birthdayRouter from './routes/birthday.mjs';
 import { startDealsCron } from './jobs/dealsJob.mjs';
 
 const app = express();
@@ -61,7 +61,7 @@ app.get('/health', (_req, res) => res.json({ ok: true }));
 // --- Routes (all under /api) ----------------------------------------------
 app.use('/api', usersRouter);
 app.use('/api', profilePhotoRouter);
-app.use('/api', zipRouter);
+app.use('/api', birthdayRouter);
 app.use('/api', dealsRouter);
 app.use('/api', restaurantsRouter);
 

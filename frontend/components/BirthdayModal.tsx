@@ -1,28 +1,30 @@
 import React, { useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, fonts, radii, spacing } from '../theme/theme';
-import { isValidUsZip, sanitizeZipInput } from '../utils/zip';
+import { isValidBirthday, sanitizeBirthdayInput, toStoredBirthday } from '../utils/birthday';
 import { PrimaryButton } from './PrimaryButton';
 import { TextField } from './TextField';
 
 interface Props {
   visible: boolean;
-  currentZip: string;
+  currentBirthday: string; // stored "MM-DD" (or "")
   onClose: () => void;
-  onSave: (zip: string) => void;
+  onSave: (birthday: string) => void; // receives stored "MM-DD"
 }
 
-export function ZipModal({ visible, currentZip, onClose, onSave }: Props) {
-  const [zip, setZip] = useState(currentZip);
+export function BirthdayModal({ visible, currentBirthday, onClose, onSave }: Props) {
+  const [birthday, setBirthday] = useState(() =>
+    currentBirthday ? currentBirthday.replace('-', '/') : '',
+  );
   const [error, setError] = useState<string | null>(null);
 
   const handleSave = () => {
-    if (!isValidUsZip(zip)) {
-      setError('Enter a valid 5-digit US ZIP code.');
+    if (!isValidBirthday(birthday)) {
+      setError('Enter your birthday as MM/DD.');
       return;
     }
     setError(null);
-    onSave(zip);
+    onSave(toStoredBirthday(birthday));
     onClose();
   };
 
@@ -31,26 +33,26 @@ export function ZipModal({ visible, currentZip, onClose, onSave }: Props) {
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={() => {}}>
           <View style={styles.handle} />
-          <Text style={styles.title}>Change your ZIP</Text>
+          <Text style={styles.title}>Change your birthday</Text>
           <Text style={styles.sub}>
-            We use your ZIP to find deals at chains with a branch near you.
+            We use your birthday to surface birthday deals during your special day, week, or month.
           </Text>
 
           <TextField
-            label="US ZIP code"
-            value={zip}
+            label="Birthday (MM/DD)"
+            value={birthday}
             onChangeText={(t) => {
-              setZip(sanitizeZipInput(t));
+              setBirthday(sanitizeBirthdayInput(t));
               if (error) setError(null);
             }}
-            placeholder="10001"
+            placeholder="07/04"
             keyboardType="number-pad"
             maxLength={5}
             error={error}
             mono
           />
 
-          <PrimaryButton label="Save ZIP" onPress={handleSave} />
+          <PrimaryButton label="Save birthday" onPress={handleSave} />
           <PrimaryButton label="Cancel" variant="ghost" onPress={onClose} style={{ marginTop: spacing.sm }} />
         </Pressable>
       </Pressable>

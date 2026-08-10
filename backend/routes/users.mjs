@@ -34,16 +34,19 @@ function safeUser(user, restaurantIds) {
     id: user.id,
     displayName: user.displayName,
     email: user.email,
-    zip: user.zip,
+    birthday: user.birthday ?? null,
     profilePhoto: user.profilePhoto ?? null,
     restaurantIds,
   };
 }
 
-// Create a new account. body: { displayName, email, password, zip }
+// "MM-DD" month+day (no year). Validated at the app layer; stored as a String.
+const BIRTHDAY_RE = /^\d{2}-\d{2}$/;
+
+// Create a new account. body: { displayName, email, password, birthday }
 router.post('/users', signupLimiter, async (req, res, next) => {
   try {
-    const { displayName, email, password, zip } = req.body ?? {};
+    const { displayName, email, password, birthday } = req.body ?? {};
     const name = typeof displayName === 'string' ? displayName.trim() : '';
     if (!name) return res.status(400).json({ error: 'Display name is required.' });
     if (typeof email !== 'string' || !EMAIL_RE.test(email))
@@ -52,15 +55,15 @@ router.post('/users', signupLimiter, async (req, res, next) => {
       return res
         .status(400)
         .json({ error: 'Password must be more than 7 characters and include a special character.' });
-    if (typeof zip !== 'string' || !zip.trim())
-      return res.status(400).json({ error: 'ZIP is required.' });
+    if (typeof birthday !== 'string' || !BIRTHDAY_RE.test(birthday.trim()))
+      return res.status(400).json({ error: 'A valid birthday is required.' });
 
     const user = await prisma.user.create({
       data: {
         displayName: name,
         email: email.trim().toLowerCase(),
         passwordHash: hashPassword(password),
-        zip: zip.trim(),
+        birthday: birthday.trim(),
       },
     });
     const token = await createSession(user.id);

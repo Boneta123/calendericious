@@ -101,7 +101,9 @@ export function CalendarGrid({ onSelectDay }: Props) {
               const hasDeals =
                 inMonth &&
                 deals.some(
-                  (deal) => selectedIds.has(deal.restaurantId) && dealShowsOnDate(deal, date),
+                  (deal) =>
+                    selectedIds.has(deal.restaurantId) &&
+                    dealShowsOnDate(deal, date, user?.birthday),
                 );
               return (
                 <Pressable

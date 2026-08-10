@@ -1,7 +1,7 @@
 /**
  * DealDay design tokens — "the deal almanac"
  * Cream menu-paper canvas, appetizing tomato/mustard, basil for all-day,
- * grape for rewards. Times & ZIP speak in monospace (the receipt voice).
+ * grape for rewards. Times & dates speak in monospace (the receipt voice).
  */
 
 export const colors = {

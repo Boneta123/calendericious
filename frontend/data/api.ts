@@ -80,7 +80,7 @@ export interface ApiDeal {
   restaurantId: string;
   title: string;
   description: string;
-  category: 'DAY' | 'TIME' | 'LIMITED_TIME';
+  category: 'DAY' | 'TIME' | 'LIMITED_TIME' | 'BIRTHDAY';
   /** Weekdays this deal recurs on, 0=Sun..6=Sat. Empty = applies any day. */
   daysOfWeek: number[];
   startTime: string | null; // "HH:MM"
@@ -89,6 +89,8 @@ export interface ApiDeal {
   validThrough: string | null; // ISO date — end of a dated/limited promo
   requiresRewards: boolean;
   onlineOrderOnly: boolean; // redeemable only via online/app/promo-code order
+  /** BIRTHDAY deals only: how wide around the user's birthday it shows. */
+  birthdayWindow: 'DAY' | 'WEEK' | 'MONTH' | null;
   sourceUrl: string | null;
   createdAt: string;
   updatedAt: string;
@@ -113,7 +115,7 @@ export interface AuthUser {
   id: string;
   displayName: string;
   email: string;
-  zip: string;
+  birthday: string | null; // "MM-DD" month+day of the user's birthday
   profilePhoto: string | null;
   restaurantIds: string[];
 }
@@ -140,7 +142,7 @@ export async function createAccount(input: {
   displayName: string;
   email: string;
   password: string;
-  zip: string;
+  birthday: string;
 }): Promise<AuthUser> {
   const data = await sendJson<AuthResponse>('/api/users', 'POST', input);
   await persistToken(data.token);
@@ -208,6 +210,11 @@ export function saveProfilePhoto(
   );
 }
 
+/** Persist the user's birthday ("MM-DD"); returns the saved value. */
+export function saveBirthday(userId: string, birthday: string): Promise<{ birthday: string }> {
+  return sendJson<{ birthday: string }>(`/api/users/${userId}/birthday`, 'PUT', { birthday });
+}
+
 /** Persist the user's chosen restaurants; returns the saved ids. */
 export function saveRestaurants(
   userId: string,
@@ -237,11 +244,29 @@ function dayOnly(value: Date | string): Date {
  *   - empty daysOfWeek → the deal is ongoing and shows every day (within any
  *     validFrom/validThrough window). This surfaces member/app/online and other
  *     evergreen deals that have no specific day/time.
+ *   - BIRTHDAY deals show ONLY within their window around the user's birthday
+ *     ("MM-DD"): DAY = the birthday itself, WEEK = ±3 days, MONTH = the whole
+ *     birthday month. Nothing shows if the user has no birthday set.
  */
-export function dealShowsOnDate(deal: ApiDeal, date: Date): boolean {
+export function dealShowsOnDate(deal: ApiDeal, date: Date, birthday?: string | null): boolean {
   const d = dayOnly(date);
   const today = dayOnly(new Date());
   if (d < today) return false;
+
+  if (deal.category === 'BIRTHDAY') {
+    if (!birthday) return false; // no birthday on file → never
+    const [mm, dd] = birthday.split('-').map(Number);
+    if (!mm || !dd) return false;
+    const window = deal.birthdayWindow ?? 'DAY';
+    if (window === 'MONTH') return d.getMonth() === mm - 1;
+    const bday = new Date(d.getFullYear(), mm - 1, dd);
+    if (window === 'WEEK') {
+      const diffDays = Math.abs(d.getTime() - dayOnly(bday).getTime()) / 86400000;
+      return diffDays <= 3; // ±3 days = the birthday week
+    }
+    return d.getTime() === dayOnly(bday).getTime(); // DAY
+  }
+
   if (deal.validFrom && d < dayOnly(deal.validFrom)) return false;
   if (deal.validThrough && d > dayOnly(deal.validThrough)) return false;
 

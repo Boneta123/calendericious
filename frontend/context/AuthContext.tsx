@@ -1,5 +1,5 @@
 /**
- * Auth + ZIP state.
+ * Auth + birthday state.
  *
  * Real create-account + login against the backend (email = login identity,
  * displayName = shown name; passwords hashed server-side). Sessions: login/signup
@@ -9,7 +9,14 @@
  */
 
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { AuthUser, createAccount, login as loginApi, logout as logoutApi, restoreSession } from '../data/api';
+import {
+  AuthUser,
+  createAccount,
+  login as loginApi,
+  logout as logoutApi,
+  restoreSession,
+  saveBirthday,
+} from '../data/api';
 
 export type User = AuthUser;
 
@@ -20,11 +27,11 @@ interface AuthContextValue {
     displayName: string;
     email: string;
     password: string;
-    zip: string;
+    birthday: string;
   }) => Promise<User>;
   logIn: (input: { email: string; password: string }) => Promise<User>;
   logOut: () => void;
-  updateZip: (zip: string) => void;
+  updateBirthday: (birthday: string) => void;
   updatePhoto: (photo: string) => void;
 }
 
@@ -63,7 +70,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(null); // snappy UI
         logoutApi(); // revoke server-side + clear token (best-effort)
       },
-      updateZip: (zip) => setUser((prev) => (prev ? { ...prev, zip } : prev)),
+      updateBirthday: (birthday) => {
+        setUser((prev) => {
+          if (!prev) return prev;
+          saveBirthday(prev.id, birthday).catch(() => {}); // best-effort persist
+          return { ...prev, birthday };
+        });
+      },
       updatePhoto: (photo) =>
         setUser((prev) => (prev ? { ...prev, profilePhoto: photo } : prev)),
     }),

@@ -52,7 +52,7 @@ router.get('/api/users', gate, async (_req, res, next) => {
         id: true,
         displayName: true,
         email: true,
-        zip: true,
+        birthday: true,
         createdAt: true,
         lastLoginAt: true,
         _count: { select: { restaurants: true } },
@@ -69,7 +69,7 @@ router.get('/api/users', gate, async (_req, res, next) => {
           id: u.id,
           displayName: u.displayName,
           email: u.email,
-          zip: u.zip,
+          birthday: u.birthday,
           restaurantCount: u._count.restaurants,
           createdAt: u.createdAt,
           lastLoginAt: u.lastLoginAt,
@@ -213,7 +213,7 @@ router.get('/', gate, (req, res) => {
       <div class="scroll">
         <table>
           <thead><tr>
-            <th>Display name</th><th>Email</th><th>ZIP</th><th># Restaurants</th><th>Joined</th><th>Last login</th><th>Session left</th><th>Actions</th>
+            <th>Display name</th><th>Email</th><th>Birthday</th><th># Restaurants</th><th>Joined</th><th>Last login</th><th>Session left</th><th>Actions</th>
           </tr></thead>
           <tbody id="rows"><tr><td colspan="8" class="loading">Loading…</td></tr></tbody>
         </table>
@@ -248,7 +248,7 @@ router.get('/', gate, (req, res) => {
         '<tr>' +
           '<td class="name">' + esc(u.displayName) + '</td>' +
           '<td class="mono">' + esc(u.email) + '</td>' +
-          '<td class="mono">' + esc(u.zip) + '</td>' +
+          '<td class="mono">' + esc(u.birthday || '—') + '</td>' +
           '<td class="count">' + esc(u.restaurantCount) + '</td>' +
           '<td class="mono">' + esc(fmt(u.createdAt)) + '</td>' +
           '<td class="mono">' + (u.lastLoginAt ? esc(fmt(u.lastLoginAt)) : '<span class="never">never</span>') + '</td>' +

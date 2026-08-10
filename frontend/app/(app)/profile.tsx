@@ -6,21 +6,22 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { RestaurantPickerModal } from '../../components/RestaurantPickerModal';
-import { ZipModal } from '../../components/ZipModal';
+import { BirthdayModal } from '../../components/BirthdayModal';
 import { useAuth } from '../../context/AuthContext';
 import { useRestaurantSelection } from '../../context/RestaurantSelectionContext';
 import { saveProfilePhoto, saveRestaurants } from '../../data/api';
 import { colors, fonts, radii, shadow, spacing } from '../../theme/theme';
+import { formatBirthday } from '../../utils/birthday';
 
 /**
- * Profile / settings. Working parts: identity summary, change ZIP, log out.
+ * Profile / settings. Working parts: identity summary, change birthday, log out.
  * The rows marked below are placeholders whose behavior arrives with the
  * backend (notifications, favorite chains, account management).
  */
 export default function Profile() {
-  const { user, updateZip, updatePhoto, logOut } = useAuth();
+  const { user, updateBirthday, updatePhoto, logOut } = useAuth();
   const { count: restaurantCount, selectedIds } = useRestaurantSelection();
-  const [zipModal, setZipModal] = useState(false);
+  const [birthdayModal, setBirthdayModal] = useState(false);
   const [restaurantModal, setRestaurantModal] = useState(false);
   // Hydrate from the saved photo (a compressed base64 data URI returned at login).
   const [photoUri, setPhotoUri] = useState<string | null>(user?.profilePhoto ?? null);
@@ -95,12 +96,13 @@ export default function Profile() {
           <Text style={styles.email}>{user?.email}</Text>
         </View>
 
-        <Text style={styles.sectionLabel}>Location</Text>
-        <Pressable onPress={() => setZipModal(true)} style={[styles.row, shadow.soft]}>
-          <Text style={styles.rowIcon}>📍</Text>
+        <Text style={styles.sectionLabel}>Birthday</Text>
+        <Pressable onPress={() => setBirthdayModal(true)} style={[styles.row, shadow.soft]}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.rowTitle}>ZIP code</Text>
-            <Text style={styles.rowSub}>Deals near {user?.zip}</Text>
+            <Text style={styles.rowTitle}>Birthday</Text>
+            <Text style={styles.rowSub}>
+              {user?.birthday ? `Your birthday ${formatBirthday(user.birthday)}` : 'Not set'}
+            </Text>
           </View>
           <Text style={styles.rowAction}>Change</Text>
         </Pressable>
@@ -135,11 +137,11 @@ export default function Profile() {
         />
       </ScrollView>
 
-      <ZipModal
-        visible={zipModal}
-        currentZip={user?.zip ?? ''}
-        onClose={() => setZipModal(false)}
-        onSave={updateZip}
+      <BirthdayModal
+        visible={birthdayModal}
+        currentBirthday={user?.birthday ?? ''}
+        onClose={() => setBirthdayModal(false)}
+        onSave={updateBirthday}
       />
 
       <RestaurantPickerModal

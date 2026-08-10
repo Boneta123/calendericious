@@ -20,21 +20,29 @@ datasource db {
   // which reads DATABASE_URL from the environment. Never hardcode a URL/secret.
 }
 
-/// Fixed deal buckets — matches the scraper's `category` (day | time | limited-time).
+/// Fixed deal buckets — matches the scraper's `category` (day | time | limited-time | birthday).
 enum DealCategory {
   DAY
   TIME
   LIMITED_TIME
+  BIRTHDAY
 }
 
-/// App user. Mirrors AuthContext (email, displayName, zip) + profile photo.
+/// How wide a BIRTHDAY deal shows around the user's birthday.
+enum BirthdayWindow {
+  DAY
+  WEEK
+  MONTH
+}
+
+/// App user. Mirrors AuthContext (email, displayName, birthday) + profile photo.
 model User {
   id           String   @id @default(cuid())
   displayName  String // human name shown when referencing the user (not unique)
   email        String   @unique // the login identity
   passwordHash String // hash only — never plaintext; hashed at the app layer
   profilePhoto String? // URL/path to the image, not binary
-  zip          String // 5-digit US ZIP
+  birthday     String? // "MM-DD" month+day of the user's birthday (no year)
   lastLoginAt  DateTime? // set on each successful login (admin dashboard)
   resetCodeHash      String?   // hash of the 6-digit password-reset code (single-use)
   resetCodeExpiresAt DateTime? // when the reset code expires (~15 min)
@@ -108,6 +116,7 @@ model Deal {
   validThrough   DateTime? // end date for limited-time promos; null otherwise
   requiresRewards Boolean  @default(false) // loyalty/rewards/app membership required
   onlineOrderOnly Boolean  @default(false) // redeemable ONLY via online/app/promo-code order
+  birthdayWindow BirthdayWindow? // only set for BIRTHDAY deals: how wide around the birthday it shows
   sourceUrl      String? // page the deal was scraped from (traceability)
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)

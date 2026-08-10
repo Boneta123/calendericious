@@ -42,8 +42,11 @@ export default function DayDetail() {
   }, [load, user?.id]);
 
   const deals = useMemo(
-    () => allDeals.filter((d) => selectedIds.has(d.restaurantId) && dealShowsOnDate(d, date)),
-    [allDeals, date, selectedIds],
+    () =>
+      allDeals.filter(
+        (d) => selectedIds.has(d.restaurantId) && dealShowsOnDate(d, date, user?.birthday),
+      ),
+    [allDeals, date, selectedIds, user?.birthday],
   );
 
   return (

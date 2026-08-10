@@ -9,11 +9,19 @@
  *     requiresRewards, sourceUrl }
  */
 
-/** "day"|"time"|"limited-time" -> DealCategory enum value, or null if invalid. */
+/** "day"|"time"|"limited-time"|"birthday" -> DealCategory enum value, or null if invalid. */
 const CATEGORY = {
   day: 'DAY',
   time: 'TIME',
   'limited-time': 'LIMITED_TIME',
+  birthday: 'BIRTHDAY',
+};
+
+/** "day"|"week"|"month" -> BirthdayWindow enum value; null otherwise. */
+const BIRTHDAY_WINDOW = {
+  day: 'DAY',
+  week: 'WEEK',
+  month: 'MONTH',
 };
 
 /** Weekday token (first 3 letters) -> JS getDay() index (Sun=0..Sat=6). */
@@ -100,6 +108,12 @@ export function mapDeal(raw, restaurantId) {
   const category = CATEGORY[String(raw.category || '').toLowerCase()];
   if (!category) return null; // invalid/absent category -> skip
 
+  // BIRTHDAY deals carry a display window (default DAY); other categories: null.
+  const birthdayWindow =
+    category === 'BIRTHDAY'
+      ? BIRTHDAY_WINDOW[String(raw.birthdayWindow || '').toLowerCase()] || 'DAY'
+      : null;
+
   return {
     restaurantId,
     title: orNull(raw.dealName) || '(untitled deal)',
@@ -112,6 +126,7 @@ export function mapDeal(raw, restaurantId) {
     validThrough: parseDate(raw.validThrough),
     requiresRewards: Boolean(raw.requiresRewards),
     onlineOrderOnly: Boolean(raw.onlineOrderOnly),
+    birthdayWindow,
     sourceUrl: orNull(raw.sourceUrl),
   };
 }
