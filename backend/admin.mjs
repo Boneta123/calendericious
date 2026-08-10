@@ -46,6 +46,7 @@ function gate(req, res, next) {
 // JSON: registered users, most-recently-active first. Never includes passwordHash.
 router.get('/api/users', gate, async (_req, res, next) => {
   try {
+    const now = Date.now();
     const users = await prisma.user.findMany({
       select: {
         id: true,
@@ -55,18 +56,26 @@ router.get('/api/users', gate, async (_req, res, next) => {
         createdAt: true,
         lastLoginAt: true,
         _count: { select: { restaurants: true } },
+        sessions: { select: { expiresAt: true } },
       },
     });
     const rows = users
-      .map((u) => ({
-        id: u.id,
-        displayName: u.displayName,
-        email: u.email,
-        zip: u.zip,
-        restaurantCount: u._count.restaurants,
-        createdAt: u.createdAt,
-        lastLoginAt: u.lastLoginAt,
-      }))
+      .map((u) => {
+        // Furthest-out non-expired session = how long until they're fully logged out.
+        const active = u.sessions
+          .map((s) => new Date(s.expiresAt).getTime())
+          .filter((t) => t > now);
+        return {
+          id: u.id,
+          displayName: u.displayName,
+          email: u.email,
+          zip: u.zip,
+          restaurantCount: u._count.restaurants,
+          createdAt: u.createdAt,
+          lastLoginAt: u.lastLoginAt,
+          sessionExpiresAt: active.length ? new Date(Math.max(...active)) : null,
+        };
+      })
       // most recent login first; users who never logged in (null) last
       .sort((a, b) => {
         const ta = a.lastLoginAt ? new Date(a.lastLoginAt).getTime() : -Infinity;
@@ -204,9 +213,9 @@ router.get('/', gate, (req, res) => {
       <div class="scroll">
         <table>
           <thead><tr>
-            <th>Display name</th><th>Email</th><th>ZIP</th><th># Restaurants</th><th>Joined</th><th>Last login</th><th>Actions</th>
+            <th>Display name</th><th>Email</th><th>ZIP</th><th># Restaurants</th><th>Joined</th><th>Last login</th><th>Session left</th><th>Actions</th>
           </tr></thead>
-          <tbody id="rows"><tr><td colspan="7" class="loading">Loading…</td></tr></tbody>
+          <tbody id="rows"><tr><td colspan="8" class="loading">Loading…</td></tr></tbody>
         </table>
       </div>
     </section>
@@ -215,6 +224,17 @@ router.get('/', gate, (req, res) => {
 <script>
   const esc = (s) => String(s).replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
   const fmt = (v) => v ? new Date(v).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '';
+  // Time remaining until a session expires, e.g. "29d 14h" / "3h 12m" / "8m".
+  function timeLeft(v) {
+    if (!v) return '<span class="never">no session</span>';
+    let ms = new Date(v).getTime() - Date.now();
+    if (ms <= 0) return '<span class="never">expired</span>';
+    const d = Math.floor(ms / 86400000); ms -= d * 86400000;
+    const h = Math.floor(ms / 3600000); ms -= h * 3600000;
+    const m = Math.floor(ms / 60000);
+    const parts = d ? [d + 'd', h + 'h'] : h ? [h + 'h', m + 'm'] : [m + 'm'];
+    return '<span class="count">' + parts.join(' ') + '</span>';
+  }
   fetch(${JSON.stringify(usersUrl)})
     .then(r => r.json())
     .then(users => {
@@ -223,7 +243,7 @@ router.get('/', gate, (req, res) => {
       document.getElementById('active24').textContent =
         users.filter(u => u.lastLoginAt && new Date(u.lastLoginAt).getTime() >= dayAgo).length;
       const tbody = document.getElementById('rows');
-      if (!users.length) { tbody.innerHTML = '<tr><td colspan="7" class="empty">No users yet — create an account in the app.</td></tr>'; return; }
+      if (!users.length) { tbody.innerHTML = '<tr><td colspan="8" class="empty">No users yet — create an account in the app.</td></tr>'; return; }
       tbody.innerHTML = users.map(u => (
         '<tr>' +
           '<td class="name">' + esc(u.displayName) + '</td>' +
@@ -232,12 +252,13 @@ router.get('/', gate, (req, res) => {
           '<td class="count">' + esc(u.restaurantCount) + '</td>' +
           '<td class="mono">' + esc(fmt(u.createdAt)) + '</td>' +
           '<td class="mono">' + (u.lastLoginAt ? esc(fmt(u.lastLoginAt)) : '<span class="never">never</span>') + '</td>' +
+          '<td class="mono">' + timeLeft(u.sessionExpiresAt) + '</td>' +
           '<td><button class="btn-remove" data-id="' + esc(u.id) + '" data-name="' + esc(u.displayName) + '">Remove</button></td>' +
         '</tr>'
       )).join('');
       tbody.querySelectorAll('.btn-remove').forEach(btn => btn.addEventListener('click', () => removeUser(btn)));
     })
-    .catch(() => { document.getElementById('rows').innerHTML = '<tr><td colspan="7" class="empty">Failed to load users.</td></tr>'; });
+    .catch(() => { document.getElementById('rows').innerHTML = '<tr><td colspan="8" class="empty">Failed to load users.</td></tr>'; });
 
   const DELETE_KEY_QS = ${JSON.stringify(keyQs)};
   function removeUser(btn) {
