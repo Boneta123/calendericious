@@ -58,6 +58,10 @@ export default function CalendarHome() {
           <View style={styles.legendDot} />
           <Text style={styles.legendText}>Days with deals · tap any day to dig in</Text>
         </View>
+
+        <Text style={styles.footnote}>
+          {new Date().getFullYear()} is as far ahead as the calendar goes.
+        </Text>
       </View>
 
       <ZipModal
@@ -125,4 +129,11 @@ const styles = StyleSheet.create({
     marginRight: spacing.sm,
   },
   legendText: { fontFamily: fonts.bodySemi, fontSize: 13, color: colors.inkSoft },
+  footnote: {
+    fontFamily: fonts.body,
+    fontSize: 11,
+    color: colors.inkFaint,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+  },
 });

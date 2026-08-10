@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useRestaurantSelection } from '../context/RestaurantSelectionContext';
 import { ApiDeal, dealShowsOnDate, fetchDeals } from '../data/api';
+import { Spinner } from './Spinner';
 import { colors, fonts, radii, shadow, spacing } from '../theme/theme';
 import { buildMonthGrid, isSameDay, MONTH_NAMES, WEEKDAY_LABELS } from '../utils/date';
 
@@ -19,6 +20,7 @@ export function CalendarGrid({ onSelectDay }: Props) {
   const { user } = useAuth();
   const { selectedIds } = useRestaurantSelection();
   const [deals, setDeals] = useState<ApiDeal[]>([]);
+  const [loading, setLoading] = useState(true);
   const today = new Date();
   const [view, setView] = useState({ year: today.getFullYear(), month: today.getMonth() });
 
@@ -26,9 +28,11 @@ export function CalendarGrid({ onSelectDay }: Props) {
   // happens live below (client-side) so selection changes reflect immediately.
   useEffect(() => {
     let active = true;
+    setLoading(true);
     fetchDeals()
       .then((d) => active && setDeals(d))
-      .catch(() => active && setDeals([]));
+      .catch(() => active && setDeals([]))
+      .finally(() => active && setLoading(false));
     return () => {
       active = false;
     };
@@ -81,6 +85,12 @@ export function CalendarGrid({ onSelectDay }: Props) {
           </Text>
         ))}
       </View>
+
+      {loading && (
+        <View style={styles.calLoading}>
+          <Spinner size={18} />
+        </View>
+      )}
 
       <View style={styles.body}>
         {weeks.map((week, wi) => (
@@ -150,6 +160,7 @@ const styles = StyleSheet.create({
   navBtnDisabled: { backgroundColor: 'transparent' },
   navText: { fontFamily: fonts.display, fontSize: 24, color: colors.tomato, marginTop: -3 },
   navTextDisabled: { color: colors.inkFaint },
+  calLoading: { alignItems: 'center', paddingVertical: spacing.xs },
   weekHeader: { flexDirection: 'row', marginBottom: spacing.sm },
   weekLabel: {
     flex: 1,

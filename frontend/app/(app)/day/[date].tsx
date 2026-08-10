@@ -1,14 +1,18 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NO_DEALS } from '../../../assets/foodCharacters';
 import { Coupon } from '../../../components/Coupon';
+import { PrimaryButton } from '../../../components/PrimaryButton';
+import { Spinner } from '../../../components/Spinner';
 import { useAuth } from '../../../context/AuthContext';
 import { useRestaurantSelection } from '../../../context/RestaurantSelectionContext';
 import { ApiDeal, dealShowsOnDate, fetchDeals } from '../../../data/api';
 import { colors, fonts, radii, spacing } from '../../../theme/theme';
 import { formatLongDate, fromDateKey, MONTH_NAMES, WEEKDAY_FULL } from '../../../utils/date';
+
+type Status = 'loading' | 'error' | 'success';
 
 export default function DayDetail() {
   const { date: dateKey } = useLocalSearchParams<{ date: string }>();
@@ -17,17 +21,25 @@ export default function DayDetail() {
 
   const date = useMemo(() => fromDateKey(dateKey ?? ''), [dateKey]);
   const [allDeals, setAllDeals] = useState<ApiDeal[]>([]);
+  const [status, setStatus] = useState<Status>('loading');
+  const mounted = useRef(true);
+  useEffect(() => () => { mounted.current = false; }, []);
 
-  // Fetch ALL deals once; filter to the user's chosen restaurants live below.
-  useEffect(() => {
-    let active = true;
+  // Fetch ALL deals; filter to the user's chosen restaurants live below.
+  const load = useCallback(() => {
+    setStatus('loading');
     fetchDeals()
-      .then((d) => active && setAllDeals(d))
-      .catch(() => active && setAllDeals([]));
-    return () => {
-      active = false;
-    };
-  }, [user?.id]);
+      .then((d) => {
+        if (!mounted.current) return;
+        setAllDeals(d);
+        setStatus('success');
+      })
+      .catch(() => mounted.current && setStatus('error'));
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load, user?.id]);
 
   const deals = useMemo(
     () => allDeals.filter((d) => selectedIds.has(d.restaurantId) && dealShowsOnDate(d, date)),
@@ -54,11 +66,24 @@ export default function DayDetail() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.sectionLabel}>
-          {deals.length > 0 ? 'In time order' : 'Nothing cooking'}
-        </Text>
+        {status === 'success' && (
+          <Text style={styles.sectionLabel}>
+            {deals.length > 0 ? 'In time order' : 'Nothing cooking'}
+          </Text>
+        )}
 
-        {deals.length === 0 ? (
+        {status === 'loading' ? (
+          <View style={styles.stateBox}>
+            <Spinner size={46} label="Loading deals…" />
+          </View>
+        ) : status === 'error' ? (
+          <View style={styles.empty}>
+            <Image source={NO_DEALS} style={styles.errorImage} resizeMode="contain" accessible={false} />
+            <Text style={styles.emptyTitle}>Couldn't load deals</Text>
+            <Text style={styles.emptySub}>Check your connection and try again.</Text>
+            <PrimaryButton label="Try again" onPress={load} style={{ marginTop: spacing.lg }} />
+          </View>
+        ) : deals.length === 0 ? (
           <View style={styles.empty}>
             <Image source={NO_DEALS} style={styles.emptyImage} resizeMode="contain" accessible={false} />
             <Text style={styles.emptyTitle}>No deals on {formatLongDate(date)}</Text>
@@ -123,8 +148,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
     marginBottom: spacing.lg,
   },
+  stateBox: { alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xxxl * 1.5 },
   empty: { alignItems: 'center', paddingVertical: spacing.xxxl },
   emptyImage: { width: 200, height: 200, marginBottom: spacing.lg },
+  errorImage: { width: 280, height: 280, marginBottom: spacing.lg },
   emptyTitle: {
     fontFamily: fonts.display,
     fontSize: 20,
