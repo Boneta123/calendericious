@@ -123,12 +123,6 @@ export default function Profile() {
           <Text style={styles.rowAction}>Edit</Text>
         </Pressable>
 
-        <Text style={styles.sectionLabel}>Coming soon</Text>
-        {/* TODO: backend — these rows are placeholders until the API exists. */}
-        <PlaceholderRow title="Deal notifications" />
-        <PlaceholderRow title="Favorite chains" />
-        <PlaceholderRow title="My rewards accounts" />
-
         <PrimaryButton
           label="Log out"
           variant="ghost"
@@ -153,15 +147,6 @@ export default function Profile() {
         }}
       />
     </SafeAreaView>
-  );
-}
-
-function PlaceholderRow({ title }: { title: string }) {
-  return (
-    <View style={[styles.row, styles.rowDisabled]}>
-      <Text style={[styles.rowTitle, { flex: 1 }]}>{title}</Text>
-      <Text style={styles.soon}>Soon</Text>
-    </View>
   );
 }
 
@@ -238,8 +223,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     gap: spacing.md,
   },
-  rowDisabled: { opacity: 0.6 },
-  rowIcon: { fontSize: 20 },
   countMark: {
     width: 34,
     height: 34,
@@ -257,11 +240,5 @@ const styles = StyleSheet.create({
     color: colors.tomato,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-  },
-  soon: {
-    fontFamily: fonts.monoBold,
-    fontSize: 11,
-    color: colors.inkFaint,
-    textTransform: 'uppercase',
   },
 });

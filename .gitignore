@@ -45,3 +45,8 @@ yarn-error.*
 
 # Personal project notes (private, do not commit)
 mboneta.md
+
+# Claude Code / agent skills (installed tooling, not app code — like node_modules)
+.agents/
+.claude/skills/
+skills-lock.json
