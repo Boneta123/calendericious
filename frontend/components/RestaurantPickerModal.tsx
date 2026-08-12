@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRestaurantSelection } from '../context/RestaurantSelectionContext';
 import { RESTAURANTS, Restaurant } from '../data/restaurants';
 import { colors, fonts, radii, shadow, spacing } from '../theme/theme';
@@ -35,6 +35,8 @@ export function RestaurantPickerModal({
 }: Props) {
   const { isSelected, toggle, count } = useRestaurantSelection();
   const onboarding = mode === 'onboarding';
+  const [query, setQuery] = useState('');
+  const searching = query.trim().length > 0;
 
   // Required-field validation (frontend only): block Continue with a clear
   // message until at least one restaurant is chosen.
@@ -52,19 +54,22 @@ export function RestaurantPickerModal({
     onContinue?.();
   };
 
-  // In onboarding, pin recommended to the top (deduped against the full list).
+  // When searching, filter the full list by name. Otherwise (onboarding) pin
+  // the recommended chains to the top, deduped against the full list.
   const data = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (q) return RESTAURANTS.filter((r) => r.name.toLowerCase().includes(q));
     if (!onboarding || recommended.length === 0) return RESTAURANTS;
     const recIds = new Set(recommended.map((r) => r.id));
     return [...recommended, ...RESTAURANTS.filter((r) => !recIds.has(r.id))];
-  }, [onboarding, recommended]);
+  }, [onboarding, recommended, query]);
 
   const recIdSet = useMemo(() => new Set(recommended.map((r) => r.id)), [recommended]);
 
   const renderItem = ({ item, index }: { item: Restaurant; index: number }) => {
     const selected = isSelected(item.id);
-    const showRecLabel = onboarding && recIdSet.size > 0 && index === 0;
-    const showAllLabel = onboarding && recIdSet.size > 0 && index === recIdSet.size;
+    const showRecLabel = !searching && onboarding && recIdSet.size > 0 && index === 0;
+    const showAllLabel = !searching && onboarding && recIdSet.size > 0 && index === recIdSet.size;
     return (
       <>
         {showRecLabel && <Text style={styles.groupLabel}>Recommended to start</Text>}
@@ -115,10 +120,26 @@ export function RestaurantPickerModal({
             </Text>
           </View>
 
+          <View style={styles.searchWrap}>
+            <TextInput
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Search restaurants…"
+              placeholderTextColor={colors.inkFaint}
+              autoCorrect={false}
+              style={styles.search}
+              accessibilityLabel="Search restaurants"
+            />
+          </View>
+
           <FlatList
             data={data}
             keyExtractor={(r) => r.id}
             renderItem={renderItem}
+            keyboardShouldPersistTaps="handled"
+            ListEmptyComponent={
+              searching ? <Text style={styles.empty}>No restaurants match "{query.trim()}".</Text> : null
+            }
             contentContainerStyle={styles.list}
             showsVerticalScrollIndicator={false}
           />
@@ -166,6 +187,25 @@ const styles = StyleSheet.create({
   title: { fontFamily: fonts.display, fontSize: 26, color: colors.ink },
   sub: { fontFamily: fonts.body, fontSize: 14, color: colors.inkSoft, marginTop: 2, lineHeight: 20 },
   count: { fontFamily: fonts.bodyBold, color: colors.tomato },
+  searchWrap: { paddingHorizontal: spacing.xl, marginBottom: spacing.sm },
+  search: {
+    backgroundColor: colors.card,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.line,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    fontFamily: fonts.bodySemi,
+    fontSize: 15,
+    color: colors.ink,
+  },
+  empty: {
+    fontFamily: fonts.bodySemi,
+    fontSize: 14,
+    color: colors.inkSoft,
+    textAlign: 'center',
+    paddingVertical: spacing.xl,
+  },
   list: { paddingHorizontal: spacing.xl, paddingBottom: spacing.md },
   groupLabel: {
     fontFamily: fonts.bodyBold,

@@ -1,5 +1,5 @@
-import React from 'react';
-import { Pressable, StyleSheet, Text, ViewStyle } from 'react-native';
+import React, { useRef } from 'react';
+import { Animated, Pressable, StyleSheet, Text, ViewStyle } from 'react-native';
 import { colors, fonts, radii, shadow, spacing } from '../theme/theme';
 
 interface Props {
@@ -18,23 +18,34 @@ export function PrimaryButton({
   style,
 }: Props) {
   const ghost = variant === 'ghost';
+  // Springy press-scale — a small, tactile "pop" shared by every button.
+  const scale = useRef(new Animated.Value(1)).current;
+  const pressIn = () =>
+    !disabled &&
+    Animated.spring(scale, { toValue: 0.96, speed: 50, bounciness: 0, useNativeDriver: true }).start();
+  const pressOut = () =>
+    Animated.spring(scale, { toValue: 1, speed: 20, bounciness: 10, useNativeDriver: true }).start();
+
   return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      accessibilityRole="button"
-      accessibilityState={{ disabled }}
-      style={({ pressed }) => [
-        styles.base,
-        ghost ? styles.ghost : styles.solid,
-        !ghost && !disabled && shadow.soft,
-        pressed && !disabled && styles.pressed,
-        disabled && styles.disabled,
-        style,
-      ]}
-    >
-      <Text style={[styles.label, ghost && styles.ghostLabel]}>{label}</Text>
-    </Pressable>
+    <Animated.View style={[{ transform: [{ scale }] }, style]}>
+      <Pressable
+        onPress={onPress}
+        onPressIn={pressIn}
+        onPressOut={pressOut}
+        disabled={disabled}
+        accessibilityRole="button"
+        accessibilityState={{ disabled }}
+        style={({ pressed }) => [
+          styles.base,
+          ghost ? styles.ghost : styles.solid,
+          !ghost && !disabled && shadow.soft,
+          pressed && !disabled && styles.pressed,
+          disabled && styles.disabled,
+        ]}
+      >
+        <Text style={[styles.label, ghost && styles.ghostLabel]}>{label}</Text>
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -52,7 +63,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.line,
   },
-  pressed: { transform: [{ scale: 0.98 }], backgroundColor: colors.tomatoDeep },
+  pressed: { backgroundColor: colors.tomatoDeep },
   disabled: { backgroundColor: colors.line },
   label: {
     fontFamily: fonts.display,

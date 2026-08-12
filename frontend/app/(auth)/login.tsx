@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FOOD_FRIENDS } from '../../assets/foodCharacters';
 import { BrandLogo } from '../../components/BrandLogo';
+import { FadeInView } from '../../components/FadeInView';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { TextField } from '../../components/TextField';
 import { useAuth } from '../../context/AuthContext';
@@ -58,7 +59,7 @@ export default function LogIn() {
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.header}>
+          <FadeInView delay={40} style={styles.header}>
             <BrandLogo width={300} />
             <Image
               source={FOOD_FRIENDS}
@@ -69,7 +70,7 @@ export default function LogIn() {
             />
             <Text style={styles.title}>Welcome back, hungry.</Text>
             <Text style={styles.sub}>Log in to see today's deals near you.</Text>
-          </View>
+          </FadeInView>
 
           <TextField
             label="Email"

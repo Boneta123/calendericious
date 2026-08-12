@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BrandLogo } from '../../components/BrandLogo';
+import { FadeInView } from '../../components/FadeInView';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { RestaurantPickerModal } from '../../components/RestaurantPickerModal';
 import { TextField } from '../../components/TextField';
@@ -91,13 +92,13 @@ export default function SignUp() {
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.header}>
+          <FadeInView delay={40} style={styles.header}>
             <BrandLogo width={300} />
             <Text style={styles.title}>Claim a seat at the table.</Text>
             <Text style={styles.sub}>
               Create an account and we'll surface the tastiest deals — plus birthday treats when your day rolls around.
             </Text>
-          </View>
+          </FadeInView>
 
           <TextField
             label="Display name"

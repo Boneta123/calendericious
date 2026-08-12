@@ -4,6 +4,7 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NO_DEALS } from '../../../assets/foodCharacters';
 import { Coupon } from '../../../components/Coupon';
+import { FadeInView } from '../../../components/FadeInView';
 import { PrimaryButton } from '../../../components/PrimaryButton';
 import { Spinner } from '../../../components/Spinner';
 import { useAuth } from '../../../context/AuthContext';
@@ -52,7 +53,7 @@ export default function DayDetail() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       {/* Header */}
-      <View style={styles.header}>
+      <FadeInView delay={40} style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.back} accessibilityLabel="Go back">
           <Text style={styles.backText}>‹</Text>
         </Pressable>
@@ -66,7 +67,7 @@ export default function DayDetail() {
           <Text style={styles.countNum}>{deals.length}</Text>
           <Text style={styles.countLabel}>deals</Text>
         </View>
-      </View>
+      </FadeInView>
 
       <ScrollView contentContainerStyle={styles.content}>
         {status === 'success' && (

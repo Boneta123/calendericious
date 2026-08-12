@@ -5,6 +5,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BrandLogo } from '../../components/BrandLogo';
 import { CalendarGrid } from '../../components/CalendarGrid';
 import { FoodScatter } from '../../components/FoodScatter';
+import { FadeInView } from '../../components/FadeInView';
+import { TopNav } from '../../components/TopNav';
 import { BirthdayModal } from '../../components/BirthdayModal';
 import { useAuth } from '../../context/AuthContext';
 import { colors, fonts, radii, shadow, spacing } from '../../theme/theme';
@@ -21,9 +23,10 @@ export default function CalendarHome() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <FoodScatter />
       <View style={styles.content}>
+        <TopNav />
         <BrandLogo width={150} style={{ marginBottom: spacing.md }} />
         {/* Greeting + birthday chip */}
-        <View style={styles.topRow}>
+        <FadeInView delay={40} style={styles.topRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.hello}>Hey {user?.displayName}</Text>
             <Text style={styles.tagline}>What's on the menu this month?</Text>
@@ -41,7 +44,7 @@ export default function CalendarHome() {
               </Text>
             )}
           </Pressable>
-        </View>
+        </FadeInView>
 
         <Pressable
           onPress={() => setBirthdayModal(true)}

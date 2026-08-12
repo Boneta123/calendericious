@@ -16,6 +16,10 @@ export const FOOD_FRIENDS: ImageSourcePropType = require('./breakfastBuddies.png
 /** Shown on the day-detail empty state when there are no deals. */
 export const NO_DEALS: ImageSourcePropType = require('./noDeals.png');
 
+/** Crowdsourcing submission icons — pick a deal vs a restaurant to submit. */
+export const DEAL_SUBMISSION_ICON: ImageSourcePropType = require('./dealSubmissionIcon.png');
+export const RESTAURANT_SUBMISSION_ICON: ImageSourcePropType = require('./restarauntSubmissionIcon.png');
+
 /** Individual mascots, reused across the scattered background. */
 export const CHARACTERS: ImageSourcePropType[] = [
   require('./boba.png'),
