@@ -9,6 +9,7 @@ import { PrimaryButton } from '../../../components/PrimaryButton';
 import { Spinner } from '../../../components/Spinner';
 import { useAuth } from '../../../context/AuthContext';
 import { useRestaurantSelection } from '../../../context/RestaurantSelectionContext';
+import { useFoodVendors } from '../../../context/FoodVendorContext';
 import { ApiDeal, dealShowsOnDate, fetchDeals } from '../../../data/api';
 import { colors, fonts, radii, spacing } from '../../../theme/theme';
 import { formatLongDate, fromDateKey, MONTH_NAMES, WEEKDAY_FULL } from '../../../utils/date';
@@ -19,6 +20,7 @@ export default function DayDetail() {
   const { date: dateKey } = useLocalSearchParams<{ date: string }>();
   const { user } = useAuth();
   const { selectedIds } = useRestaurantSelection();
+  const { foodVendorSelectedIds, foodVendorMode } = useFoodVendors();
 
   const date = useMemo(() => fromDateKey(dateKey ?? ''), [dateKey]);
   const [allDeals, setAllDeals] = useState<ApiDeal[]>([]);
@@ -44,10 +46,13 @@ export default function DayDetail() {
 
   const deals = useMemo(
     () =>
-      allDeals.filter(
-        (d) => selectedIds.has(d.restaurantId) && dealShowsOnDate(d, date, user?.birthday),
-      ),
-    [allDeals, date, selectedIds, user?.birthday],
+      allDeals.filter((d) => {
+        const inScope = foodVendorMode
+          ? !!d.foodVendorId && foodVendorSelectedIds.has(d.foodVendorId)
+          : !!d.restaurantId && selectedIds.has(d.restaurantId);
+        return inScope && dealShowsOnDate(d, date, user?.birthday);
+      }),
+    [allDeals, date, selectedIds, foodVendorSelectedIds, foodVendorMode, user?.birthday],
   );
 
   return (

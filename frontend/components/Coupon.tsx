@@ -1,6 +1,7 @@
-import React from 'react';
+import { router } from 'expo-router';
+import React, { useState } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
-import { ApiDeal } from '../data/api';
+import { ApiDeal, dealVendor, dislikeDeal, likeDeal } from '../data/api';
 import { colors, fonts, radii, shadow, spacing } from '../theme/theme';
 import { Badge } from './Badge';
 import { RestaurantLogo } from './RestaurantLogo';
@@ -9,11 +10,46 @@ import { TimeWindowBar } from './TimeWindowBar';
 /**
  * The signature element: a deal rendered as a tear-off coupon.
  * Brand-tinted top, a dashed perforation with notched edges, and a stub
- * that carries the time window + a Rewards badge when required.
+ * that carries the time window + a Rewards badge when required. Works for a
+ * restaurant OR food-vendor deal (see `dealVendor`).
  */
 export function Coupon({ item }: { item: ApiDeal }) {
-  const { restaurant } = item;
+  const vendor = dealVendor(item);
   const allDay = item.startTime === null;
+
+  // Like/dislike — optimistic; one vote per mounted card.
+  const [likes, setLikes] = useState(item.likes);
+  const [dislikes, setDislikes] = useState(item.dislikes);
+  const [voted, setVoted] = useState<null | 'like' | 'dislike'>(null);
+
+  const like = () => {
+    if (voted) return;
+    setVoted('like');
+    setLikes((n) => n + 1);
+    likeDeal(item.id)
+      .then((r) => {
+        setLikes(r.likes);
+        setDislikes(r.dislikes);
+      })
+      .catch(() => {
+        setVoted(null);
+        setLikes((n) => n - 1);
+      });
+  };
+  const dislike = () => {
+    if (voted) return;
+    setVoted('dislike');
+    setDislikes((n) => n + 1);
+    dislikeDeal(item.id)
+      .then((r) => {
+        setLikes(r.likes);
+        setDislikes(r.dislikes);
+      })
+      .catch(() => {
+        setVoted(null);
+        setDislikes((n) => n - 1);
+      });
+  };
 
   return (
     <View style={[styles.card, shadow.card]}>
@@ -23,10 +59,10 @@ export function Coupon({ item }: { item: ApiDeal }) {
       <View style={styles.body}>
         <View style={styles.headerRow}>
           <View style={styles.logoChip}>
-            <RestaurantLogo restaurant={restaurant} size={48} />
+            <RestaurantLogo restaurant={vendor} size={48} />
           </View>
           <View style={styles.headerText}>
-            <Text style={styles.chain}>{restaurant.name}</Text>
+            <Text style={styles.chain}>{vendor.name}</Text>
           </View>
         </View>
 
@@ -39,12 +75,47 @@ export function Coupon({ item }: { item: ApiDeal }) {
           {item.requiresRewards && <Badge label="Rewards required" tone="grape" />}
         </View>
 
+        {/* Like / dislike */}
+        <View style={styles.voteRow}>
+          <Pressable
+            onPress={like}
+            disabled={!!voted}
+            style={[styles.voteBtn, voted === 'like' && styles.voteBtnActive]}
+            accessibilityRole="button"
+            accessibilityLabel={`Like this deal (${likes})`}
+          >
+            <Text style={[styles.voteText, voted === 'like' && styles.voteTextActive]}>Like · {likes}</Text>
+          </Pressable>
+          <Pressable
+            onPress={dislike}
+            disabled={!!voted}
+            style={[styles.voteBtn, voted === 'dislike' && styles.voteBtnActive]}
+            accessibilityRole="button"
+            accessibilityLabel={`Dislike this deal (${dislikes})`}
+          >
+            <Text style={[styles.voteText, voted === 'dislike' && styles.voteTextActive]}>
+              Dislike · {dislikes}
+            </Text>
+          </Pressable>
+        </View>
+
+        {item.foundByUserId && (
+          <Pressable
+            onPress={() => router.push(`/(app)/user/${item.foundByUserId}`)}
+            style={styles.foundByLink}
+            accessibilityRole="button"
+            accessibilityLabel={`View profile of ${item.foundBy ?? 'the member'} who added this deal`}
+          >
+            <Text style={styles.foundByText}>Added by {item.foundBy ?? 'a member'} ›</Text>
+          </Pressable>
+        )}
+
         {item.sourceUrl && (
           <Pressable
             onPress={() => Linking.openURL(item.sourceUrl!)}
             style={styles.sourceLink}
             accessibilityRole="link"
-            accessibilityLabel={`View this deal on ${restaurant.name}'s website`}
+            accessibilityLabel={`View this deal on ${vendor.name}'s website`}
           >
             <Text style={styles.sourceText}>View source ↗</Text>
           </Pressable>
@@ -105,6 +176,19 @@ const styles = StyleSheet.create({
     lineHeight: 21,
   },
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.lg },
+  voteRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
+  voteBtn: {
+    borderRadius: radii.pill,
+    borderWidth: 2,
+    borderColor: colors.line,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+  },
+  voteBtnActive: { backgroundColor: colors.tomato, borderColor: colors.tomato },
+  voteText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.inkSoft },
+  voteTextActive: { color: '#FFFFFF' },
+  foundByLink: { marginTop: spacing.md, alignSelf: 'flex-start' },
+  foundByText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.tomato },
   sourceLink: { marginTop: spacing.md, alignSelf: 'flex-start' },
   sourceText: {
     fontFamily: fonts.bodyBold,

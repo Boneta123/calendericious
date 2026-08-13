@@ -9,12 +9,14 @@ import { FadeInView } from '../../components/FadeInView';
 import { TopNav } from '../../components/TopNav';
 import { BirthdayModal } from '../../components/BirthdayModal';
 import { useAuth } from '../../context/AuthContext';
+import { useFoodVendors } from '../../context/FoodVendorContext';
 import { colors, fonts, radii, shadow, spacing } from '../../theme/theme';
 import { formatBirthday } from '../../utils/birthday';
 import { toDateKey } from '../../utils/date';
 
 export default function CalendarHome() {
   const { user, updateBirthday } = useAuth();
+  const { foodVendorMode, toggleFoodVendorMode } = useFoodVendors();
   const [birthdayModal, setBirthdayModal] = useState(false);
 
   const openDay = (date: Date) => router.push(`/(app)/day/${toDateKey(date)}`);
@@ -57,11 +59,27 @@ export default function CalendarHome() {
           <Text style={styles.birthdayChange}>Change</Text>
         </Pressable>
 
+        <Pressable
+          onPress={toggleFoodVendorMode}
+          style={[styles.vendorToggle, foodVendorMode && styles.vendorToggleOn, shadow.soft]}
+          accessibilityRole="button"
+          accessibilityState={{ selected: foodVendorMode }}
+          accessibilityLabel={foodVendorMode ? 'Hide food vendors, show restaurants' : 'Show food vendors'}
+        >
+          <Text style={[styles.vendorToggleText, foodVendorMode && styles.vendorToggleTextOn]}>
+            {foodVendorMode ? 'Hide food vendors' : 'Show food vendors'}
+          </Text>
+        </Pressable>
+
         <CalendarGrid onSelectDay={openDay} />
 
         <View style={styles.legend}>
-          <View style={styles.legendDot} />
-          <Text style={styles.legendText}>Days with deals · tap any day to dig in</Text>
+          <View style={[styles.legendDot, foodVendorMode && styles.legendDotVendor]} />
+          <Text style={styles.legendText}>
+            {foodVendorMode
+              ? 'Days with food-vendor deals · tap any day to dig in'
+              : 'Days with deals · tap any day to dig in'}
+          </Text>
         </View>
 
         <Text style={styles.footnote}>
@@ -113,6 +131,19 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
+  vendorToggle: {
+    alignSelf: 'center',
+    backgroundColor: colors.tomatoWash,
+    borderRadius: radii.pill,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    borderWidth: 2,
+    borderColor: colors.tomatoWash,
+  },
+  vendorToggleOn: { backgroundColor: colors.tomato, borderColor: colors.tomato },
+  vendorToggleText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.tomatoDeep },
+  vendorToggleTextOn: { color: '#FFFFFF' },
   rangeLabel: {
     fontFamily: fonts.display,
     fontSize: 20,
@@ -132,6 +163,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.mustard,
     marginRight: spacing.sm,
   },
+  legendDotVendor: { backgroundColor: colors.tomato },
   legendText: { fontFamily: fonts.bodySemi, fontSize: 13, color: colors.inkSoft },
   footnote: {
     fontFamily: fonts.body,

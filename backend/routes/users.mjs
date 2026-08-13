@@ -191,4 +191,41 @@ router.post('/auth/reset-password', resetLimiter, async (req, res, next) => {
   }
 });
 
+// Public profile of ANY user (logged-in viewers only). PUBLIC-safe fields only —
+// never email/birthday/passwordHash. Includes the user's created deals + counts.
+router.get('/users/:id/public', auth, async (req, res, next) => {
+  try {
+    const id = req.params.id;
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        displayName: true,
+        profilePhoto: true,
+        _count: { select: { foundDeals: true } },
+      },
+    });
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+
+    const deals = await prisma.deal.findMany({
+      where: { foundByUserId: id },
+      include: {
+        restaurant: { select: { id: true, name: true, logoUrl: true } },
+        foodVendor: { select: { id: true, name: true, logoUrl: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    res.json({
+      id: user.id,
+      displayName: user.displayName,
+      profilePhoto: user.profilePhoto ?? null,
+      dealCount: user._count.foundDeals,
+      deals,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

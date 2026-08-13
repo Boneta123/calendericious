@@ -42,6 +42,12 @@
           "photosPermission": "Allow Calendericious to access your photos so you can set a profile picture."
         }
       ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "We use your location to show nearby restaurant addresses."
+        }
+      ],
       "expo-secure-store"
     ]
   }

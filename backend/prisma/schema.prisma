@@ -49,6 +49,7 @@ model User {
 
   restaurants UserRestaurant[]
   sessions    Session[]
+  foundDeals  Deal[]   @relation("FoundDeals") // deals this user submitted/created
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -62,9 +63,28 @@ model Restaurant {
   host    String
   logoUrl String
   accent  String? // brand accent hex (frontend Chain.accent), optional
+  address String? // street address (crowdsourced submissions)
 
   deals Deal[]
   users UserRestaurant[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Food vendor = a place selling prepared/packaged food that ISN'T a restaurant
+/// (e.g. 7-Eleven, Stop & Shop). Same columns as Restaurant, separate table.
+/// Deals can belong to a food vendor instead of a restaurant.
+model FoodVendor {
+  id      String  @id // slug from frontend/data/foodVendors.ts slugOf()
+  name    String
+  url     String
+  host    String
+  logoUrl String
+  accent  String?
+  address String? // street address (crowdsourced submissions)
+
+  deals Deal[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -101,7 +121,12 @@ model UserRestaurant {
 /// scraper's fields so scraped deals persist without reshaping.
 model Deal {
   id           String     @id @default(cuid())
-  restaurantId String // FK -> Restaurant (replaces frontend Deal.chainId)
+  restaurantId String? // FK -> Restaurant; null when this deal belongs to a food vendor
+  foodVendorId String? // FK -> FoodVendor; null when this deal belongs to a restaurant
+  foundBy      String? // display-name cache of who found this deal; null for scraped
+  foundByUserId String? // FK -> User who created this deal; null for scraped/anonymous
+  likes        Int        @default(0) // 👍 count (button-driven)
+  dislikes     Int        @default(0) // 👎 count (button-driven)
   title        String // frontend Deal.title == scraper dealName
   description  String
   category     DealCategory
@@ -119,11 +144,16 @@ model Deal {
   birthdayWindow BirthdayWindow? // only set for BIRTHDAY deals: how wide around the birthday it shows
   sourceUrl      String? // page the deal was scraped from (traceability)
 
-  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  restaurant  Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  foodVendor  FoodVendor? @relation(fields: [foodVendorId], references: [id], onDelete: Cascade)
+  foundByUser User?       @relation("FoundDeals", fields: [foundByUserId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // DB-level: exactly one of restaurantId / foodVendorId is set (CHECK in migration).
   @@index([restaurantId])
+  @@index([foodVendorId])
+  @@index([foundByUserId])
   @@index([category])
 }

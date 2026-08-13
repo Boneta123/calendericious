@@ -19,7 +19,7 @@ import profilePhotoRouter from './routes/profilePhoto.mjs';
 import restaurantsRouter from './routes/restaurants.mjs';
 import usersRouter from './routes/users.mjs';
 import birthdayRouter from './routes/birthday.mjs';
-import { startDealsCron } from './jobs/dealsJob.mjs';
+import placesRouter from './routes/places.mjs';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -64,6 +64,7 @@ app.use('/api', profilePhotoRouter);
 app.use('/api', birthdayRouter);
 app.use('/api', dealsRouter);
 app.use('/api', restaurantsRouter);
+app.use('/api', placesRouter);
 
 // --- Admin dashboard (registered users + last-login), outside /api ---------
 app.use('/admin', adminRouter);
@@ -95,8 +96,4 @@ app.listen(PORT, '0.0.0.0', () => {
   const lan = lanAddress();
   console.log(`[server] Calendericious API listening on http://localhost:${PORT}`);
   if (lan) console.log(`[server]   on your LAN (for phones/Expo Go): http://${lan}:${PORT}`);
-  startDealsCron();
 });
-
-// Re-export so the daily refresh can be triggered manually later.
-export { runDealsRefresh } from './jobs/dealsJob.mjs';

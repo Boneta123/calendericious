@@ -17,7 +17,6 @@ import { TextField } from '../../components/TextField';
 import { useAuth } from '../../context/AuthContext';
 import { useRestaurantSelection } from '../../context/RestaurantSelectionContext';
 import { saveRestaurants } from '../../data/api';
-import { pickRandom } from '../../data/restaurants';
 import { colors, fonts, spacing } from '../../theme/theme';
 import { isValidBirthday, sanitizeBirthdayInput, toStoredBirthday } from '../../utils/birthday';
 
@@ -31,9 +30,8 @@ export default function SignUp() {
   const [birthday, setBirthday] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
-  // After the account is created, gate entry behind picking ≥1 restaurant.
+  // After the account is created, show the onboarding restaurant picker.
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [recommendations] = useState(() => pickRandom(3));
 
   const handleSubmit = async () => {
     const next: Record<string, string> = {};
@@ -169,7 +167,7 @@ export default function SignUp() {
       <RestaurantPickerModal
         visible={showOnboarding}
         mode="onboarding"
-        recommended={recommendations}
+        recommended={[]}
         onContinue={handleContinue}
       />
     </SafeAreaView>

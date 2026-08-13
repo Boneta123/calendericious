@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
-import { RESTAURANTS, Restaurant } from '../data/restaurants';
+import { createDeal } from '../data/api';
+import { fetchRestaurants, Restaurant } from '../data/restaurants';
 import { colors, fonts, radii, shadow, spacing } from '../theme/theme';
 import { PrimaryButton } from './PrimaryButton';
 import { RestaurantLogo } from './RestaurantLogo';
@@ -79,13 +80,23 @@ export function DealSubmissionForm({ onAddRestaurant }: { onAddRestaurant: () =>
   const [onlineOrderOnly, setOnlineOrderOnly] = useState(false);
   const [sourceUrl, setSourceUrl] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+
+  // Crowdsourced restaurant catalog from the DB (for the search).
+  const [catalog, setCatalog] = useState<Restaurant[]>([]);
+  useEffect(() => {
+    fetchRestaurants()
+      .then((r) => setCatalog(r))
+      .catch(() => setCatalog([]));
+  }, []);
 
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
-    return RESTAURANTS.filter((r) => r.name.toLowerCase().includes(q)).slice(0, 8);
-  }, [query]);
+    return catalog.filter((r) => r.name.toLowerCase().includes(q)).slice(0, 8);
+  }, [query, catalog]);
 
   const toggleDay = (d: number) =>
     setDays((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d].sort()));
@@ -116,10 +127,12 @@ export function DealSubmissionForm({ onAddRestaurant }: { onAddRestaurant: () =>
     setOnlineOrderOnly(false);
     setSourceUrl('');
     setErrors({});
+    setFormError(null);
+    setSubmitting(false);
     setSubmitted(false);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const next: Record<string, string> = {};
     if (!restaurant) next.restaurant = 'Pick the restaurant this deal is for.';
     if (!title.trim()) next.title = 'A deal name is required.';
@@ -143,9 +156,16 @@ export function DealSubmissionForm({ onAddRestaurant }: { onAddRestaurant: () =>
       onlineOrderOnly,
       sourceUrl: sourceUrl.trim() || null,
     };
-    // TODO: backend — POST this draft to a deal-submission endpoint.
-    console.log('[submission] deal draft', draft);
-    setSubmitted(true);
+    setSubmitting(true);
+    setFormError(null);
+    try {
+      await createDeal(draft);
+      setSubmitted(true);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Could not submit. Try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (submitted) {
@@ -313,7 +333,13 @@ export function DealSubmissionForm({ onAddRestaurant }: { onAddRestaurant: () =>
 
       <TextField label="Source link (optional)" value={sourceUrl} onChangeText={setSourceUrl} placeholder="https://…" keyboardType="url" />
 
-      <PrimaryButton label="Submit deal" onPress={handleSubmit} style={{ marginTop: spacing.md }} />
+      {formError ? <Text style={styles.formError}>{formError}</Text> : null}
+      <PrimaryButton
+        label={submitting ? 'Submitting…' : 'Submit deal'}
+        onPress={handleSubmit}
+        disabled={submitting}
+        style={{ marginTop: spacing.md }}
+      />
     </View>
   );
 }
@@ -381,6 +407,7 @@ const styles = StyleSheet.create({
   },
   inputError: { borderColor: colors.tomato },
   errText: { fontFamily: fonts.bodySemi, fontSize: 13, color: colors.tomatoDeep, marginTop: spacing.xs },
+  formError: { fontFamily: fonts.bodySemi, fontSize: 13, color: colors.tomatoDeep, marginTop: spacing.sm },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   chip: {
     borderRadius: radii.pill,

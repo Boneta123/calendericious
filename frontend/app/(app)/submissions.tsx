@@ -12,12 +12,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { DEAL_SUBMISSION_ICON, RESTAURANT_SUBMISSION_ICON } from '../../assets/foodCharacters';
 import { DealSubmissionForm } from '../../components/DealSubmissionForm';
 import { FadeInView } from '../../components/FadeInView';
+import { FoodVendorSubmissionForm } from '../../components/FoodVendorSubmissionForm';
 import { RestaurantSubmissionForm } from '../../components/RestaurantSubmissionForm';
 import { SubmissionChoiceCard } from '../../components/SubmissionChoiceCard';
 import { TopNav } from '../../components/TopNav';
 import { colors, fonts, spacing } from '../../theme/theme';
 
-type Mode = 'choose' | 'deal' | 'restaurant';
+const FOOD_VENDOR_ICON = require('../../assets/foodVendorSubmit.png');
+
+type Mode = 'choose' | 'deal' | 'restaurant' | 'vendor';
 
 export default function Submissions() {
   const [mode, setMode] = useState<Mode>('choose');
@@ -57,6 +60,13 @@ export default function Submissions() {
                   onPress={() => setMode('restaurant')}
                   delay={200}
                 />
+                <SubmissionChoiceCard
+                  icon={FOOD_VENDOR_ICON}
+                  title="Add a food vendor"
+                  subtitle="A convenience store or grocer (7-Eleven, Stop & Shop)"
+                  onPress={() => setMode('vendor')}
+                  delay={280}
+                />
               </View>
             </>
           ) : (
@@ -71,12 +81,18 @@ export default function Submissions() {
                 <Text style={styles.backText}>‹ Back</Text>
               </Pressable>
               <Text style={styles.formTitle}>
-                {mode === 'deal' ? 'Submit a deal' : 'Add a restaurant'}
+                {mode === 'deal'
+                  ? 'Submit a deal'
+                  : mode === 'restaurant'
+                    ? 'Add a restaurant'
+                    : 'Add a food vendor'}
               </Text>
               {mode === 'deal' ? (
                 <DealSubmissionForm onAddRestaurant={() => setMode('restaurant')} />
-              ) : (
+              ) : mode === 'restaurant' ? (
                 <RestaurantSubmissionForm />
+              ) : (
+                <FoodVendorSubmissionForm />
               )}
             </FadeInView>
           )}

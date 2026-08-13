@@ -74,10 +74,12 @@ export interface ApiDealRestaurant {
   logoUrl: string;
 }
 
-/** One deal row as returned by GET /api/deals. */
+/** One deal row as returned by GET /api/deals. A deal belongs to a restaurant
+ *  OR a food vendor (exactly one is non-null). */
 export interface ApiDeal {
   id: string;
-  restaurantId: string;
+  restaurantId: string | null;
+  foodVendorId: string | null;
   title: string;
   description: string;
   category: 'DAY' | 'TIME' | 'LIMITED_TIME' | 'BIRTHDAY';
@@ -91,10 +93,20 @@ export interface ApiDeal {
   onlineOrderOnly: boolean; // redeemable only via online/app/promo-code order
   /** BIRTHDAY deals only: how wide around the user's birthday it shows. */
   birthdayWindow: 'DAY' | 'WEEK' | 'MONTH' | null;
+  foundBy: string | null; // display name of who found it; null for scraped
+  foundByUserId: string | null; // the creator's user id (tap → their public profile); null for scraped
+  likes: number;
+  dislikes: number;
   sourceUrl: string | null;
   createdAt: string;
   updatedAt: string;
-  restaurant: ApiDealRestaurant;
+  restaurant: ApiDealRestaurant | null;
+  foodVendor: ApiDealRestaurant | null;
+}
+
+/** The owner (restaurant or food vendor) of a deal, for logo + name rendering. */
+export function dealVendor(deal: ApiDeal): ApiDealRestaurant {
+  return deal.restaurant ?? deal.foodVendor ?? { id: '', name: 'Unknown', logoUrl: '' };
 }
 
 /** Fetch stored deals. With a userId, only that user's chosen restaurants'
@@ -106,6 +118,94 @@ export async function fetchDeals(userId?: string): Promise<ApiDeal[]> {
     throw new Error(`fetchDeals failed: ${res.status} ${res.statusText}`);
   }
   return (await res.json()) as ApiDeal[];
+}
+
+/** A user's public profile — safe fields only + the deals they created. */
+export interface PublicProfile {
+  id: string;
+  displayName: string;
+  profilePhoto: string | null;
+  dealCount: number;
+  deals: ApiDeal[];
+}
+
+/** Fetch another user's public profile (photo, name, deal count, their deals). */
+export function fetchUserProfile(id: string): Promise<PublicProfile> {
+  return sendJson<PublicProfile>(`/api/users/${id}/public`, 'GET');
+}
+
+// --- Place autocomplete (via the backend proxy → LocationIQ) ---------------
+
+/** One suggestion: `primary` = place/name, `secondary` = full formatted address. */
+export interface PlaceSuggestion {
+  placeId: string;
+  primary: string;
+  secondary: string;
+}
+
+/** Food-POI suggestions of `kind` ('restaurant' | 'food'), biased to `coords`
+ *  when given. Each result already carries the full address in `secondary`. */
+export function placesAutocomplete(
+  input: string,
+  coords?: { lat: number; lng: number },
+  kind: 'restaurant' | 'food' = 'restaurant',
+): Promise<PlaceSuggestion[]> {
+  const params = new URLSearchParams({ input, type: kind });
+  if (coords) {
+    params.set('lat', String(coords.lat));
+    params.set('lng', String(coords.lng));
+  }
+  return sendJson<PlaceSuggestion[]>(`/api/places/autocomplete?${params.toString()}`, 'GET');
+}
+
+// --- Crowdsourcing submissions (persist to the DB) -------------------------
+
+/** Create/submit a restaurant (any logged-in user). Returns the saved row. */
+export function createRestaurant(input: {
+  name: string;
+  url: string;
+  address: string;
+  logoUrl: string;
+}): Promise<ApiDealRestaurant> {
+  return sendJson<ApiDealRestaurant>('/api/restaurants', 'POST', input);
+}
+
+/** Create/submit a food vendor (any logged-in user). Returns the saved row. */
+export function createFoodVendor(input: {
+  name: string;
+  url: string;
+  address: string;
+  logoUrl: string;
+}): Promise<ApiDealRestaurant> {
+  return sendJson<ApiDealRestaurant>('/api/food-vendors', 'POST', input);
+}
+
+/** Create/submit a deal (any logged-in user). The server stamps the creator. */
+export function createDeal(input: {
+  restaurantId: string;
+  title: string;
+  description: string;
+  category: 'DAY' | 'TIME' | 'LIMITED_TIME' | 'BIRTHDAY';
+  daysOfWeek: number[];
+  startTime: string | null;
+  endTime: string | null;
+  validFrom: string | null;
+  validThrough: string | null;
+  birthdayWindow: 'DAY' | 'WEEK' | 'MONTH' | null;
+  requiresRewards: boolean;
+  onlineOrderOnly: boolean;
+  sourceUrl: string | null;
+}): Promise<ApiDeal> {
+  return sendJson<ApiDeal>('/api/deals', 'POST', input);
+}
+
+/** Like a deal — increments the counter; returns the new totals. */
+export function likeDeal(id: string): Promise<{ likes: number; dislikes: number }> {
+  return sendJson<{ likes: number; dislikes: number }>(`/api/deals/${id}/like`, 'POST', {});
+}
+/** Dislike a deal — increments the counter; returns the new totals. */
+export function dislikeDeal(id: string): Promise<{ likes: number; dislikes: number }> {
+  return sendJson<{ likes: number; dislikes: number }>(`/api/deals/${id}/dislike`, 'POST', {});
 }
 
 // --- Auth ------------------------------------------------------------------

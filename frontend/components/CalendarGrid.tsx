@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useRestaurantSelection } from '../context/RestaurantSelectionContext';
+import { useFoodVendors } from '../context/FoodVendorContext';
 import { ApiDeal, dealShowsOnDate, fetchDeals } from '../data/api';
 import { Spinner } from './Spinner';
 import { colors, fonts, radii, shadow, spacing } from '../theme/theme';
@@ -19,6 +20,7 @@ interface Props {
 export function CalendarGrid({ onSelectDay }: Props) {
   const { user } = useAuth();
   const { selectedIds } = useRestaurantSelection();
+  const { foodVendorSelectedIds, foodVendorMode } = useFoodVendors();
   const [deals, setDeals] = useState<ApiDeal[]>([]);
   const [loading, setLoading] = useState(true);
   const today = new Date();
@@ -100,11 +102,14 @@ export function CalendarGrid({ onSelectDay }: Props) {
               const isToday = isSameDay(date, today);
               const hasDeals =
                 inMonth &&
-                deals.some(
-                  (deal) =>
-                    selectedIds.has(deal.restaurantId) &&
-                    dealShowsOnDate(deal, date, user?.birthday),
-                );
+                deals.some((deal) => {
+                  // Food-vendor view: only food-vendor deals for selected vendors.
+                  // Restaurant view (default): only restaurant deals for selected restaurants.
+                  const inScope = foodVendorMode
+                    ? !!deal.foodVendorId && foodVendorSelectedIds.has(deal.foodVendorId)
+                    : !!deal.restaurantId && selectedIds.has(deal.restaurantId);
+                  return inScope && dealShowsOnDate(deal, date, user?.birthday);
+                });
               return (
                 <Pressable
                   key={di}

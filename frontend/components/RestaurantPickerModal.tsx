@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRestaurantSelection } from '../context/RestaurantSelectionContext';
-import { RESTAURANTS, Restaurant } from '../data/restaurants';
+import { fetchRestaurants, Restaurant } from '../data/restaurants';
 import { colors, fonts, radii, shadow, spacing } from '../theme/theme';
 import { PrimaryButton } from './PrimaryButton';
 import { RestaurantLogo } from './RestaurantLogo';
@@ -38,15 +38,28 @@ export function RestaurantPickerModal({
   const [query, setQuery] = useState('');
   const searching = query.trim().length > 0;
 
-  // Required-field validation (frontend only): block Continue with a clear
-  // message until at least one restaurant is chosen.
+  // Crowdsourced catalog — loaded from the DB when the sheet opens.
+  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (!visible) return;
+    setLoading(true);
+    fetchRestaurants()
+      .then((r) => setRestaurants(r))
+      .catch(() => setRestaurants([]))
+      .finally(() => setLoading(false));
+  }, [visible]);
+  const catalogEmpty = !loading && restaurants.length === 0;
+
+  // Required-field validation (frontend only): block Continue until ≥1 chosen —
+  // BUT if the crowdsourced catalog is empty, allow continuing with none.
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (count > 0 && error) setError(null);
   }, [count, error]);
 
   const handleContinue = () => {
-    if (count === 0) {
+    if (count === 0 && !catalogEmpty) {
       setError('Pick at least one restaurant to continue.');
       return;
     }
@@ -54,15 +67,15 @@ export function RestaurantPickerModal({
     onContinue?.();
   };
 
-  // When searching, filter the full list by name. Otherwise (onboarding) pin
-  // the recommended chains to the top, deduped against the full list.
+  // When searching, filter by name. Otherwise (onboarding) pin the recommended
+  // chains to the top, deduped against the full list.
   const data = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (q) return RESTAURANTS.filter((r) => r.name.toLowerCase().includes(q));
-    if (!onboarding || recommended.length === 0) return RESTAURANTS;
+    if (q) return restaurants.filter((r) => r.name.toLowerCase().includes(q));
+    if (!onboarding || recommended.length === 0) return restaurants;
     const recIds = new Set(recommended.map((r) => r.id));
-    return [...recommended, ...RESTAURANTS.filter((r) => !recIds.has(r.id))];
-  }, [onboarding, recommended, query]);
+    return [...recommended, ...restaurants.filter((r) => !recIds.has(r.id))];
+  }, [onboarding, recommended, query, restaurants]);
 
   const recIdSet = useMemo(() => new Set(recommended.map((r) => r.id)), [recommended]);
 
@@ -138,7 +151,13 @@ export function RestaurantPickerModal({
             renderItem={renderItem}
             keyboardShouldPersistTaps="handled"
             ListEmptyComponent={
-              searching ? <Text style={styles.empty}>No restaurants match "{query.trim()}".</Text> : null
+              loading ? (
+                <Text style={styles.empty}>Loading…</Text>
+              ) : searching ? (
+                <Text style={styles.empty}>No restaurants match "{query.trim()}".</Text>
+              ) : (
+                <Text style={styles.empty}>No restaurants yet — add one from the Submissions tab.</Text>
+              )
             }
             contentContainerStyle={styles.list}
             showsVerticalScrollIndicator={false}

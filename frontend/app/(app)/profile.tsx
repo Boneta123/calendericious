@@ -1,14 +1,17 @@
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
-import { useState } from 'react';
+import * as Location from 'expo-location';
+import { useCallback, useEffect, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { RestaurantPickerModal } from '../../components/RestaurantPickerModal';
+import { FoodVendorPickerModal } from '../../components/FoodVendorPickerModal';
 import { BirthdayModal } from '../../components/BirthdayModal';
 import { useAuth } from '../../context/AuthContext';
 import { useRestaurantSelection } from '../../context/RestaurantSelectionContext';
+import { useFoodVendors } from '../../context/FoodVendorContext';
 import { saveProfilePhoto, saveRestaurants } from '../../data/api';
 import { colors, fonts, radii, shadow, spacing } from '../../theme/theme';
 import { formatBirthday } from '../../utils/birthday';
@@ -21,10 +24,44 @@ import { formatBirthday } from '../../utils/birthday';
 export default function Profile() {
   const { user, updateBirthday, updatePhoto, logOut } = useAuth();
   const { count: restaurantCount, selectedIds } = useRestaurantSelection();
+  const { count: vendorCount } = useFoodVendors();
   const [birthdayModal, setBirthdayModal] = useState(false);
   const [restaurantModal, setRestaurantModal] = useState(false);
+  const [vendorModal, setVendorModal] = useState(false);
   // Hydrate from the saved photo (a compressed base64 data URI returned at login).
   const [photoUri, setPhotoUri] = useState<string | null>(user?.profilePhoto ?? null);
+
+  // Device location — shown so the user can confirm what their device reports.
+  const [locStatus, setLocStatus] = useState<'loading' | 'denied' | 'error' | 'ok'>('loading');
+  const [locText, setLocText] = useState('');
+  const loadLocation = useCallback(async () => {
+    setLocStatus('loading');
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setLocStatus('denied');
+        return;
+      }
+      const pos = await Location.getCurrentPositionAsync({});
+      const { latitude, longitude } = pos.coords;
+      let text = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+      try {
+        const geo = await Location.reverseGeocodeAsync({ latitude, longitude });
+        const g = geo[0];
+        const parts = [g?.name, g?.city ?? g?.subregion, g?.region, g?.postalCode].filter(Boolean);
+        if (parts.length) text = parts.join(', ');
+      } catch {
+        /* reverse geocode unavailable — keep the coordinates */
+      }
+      setLocText(text);
+      setLocStatus('ok');
+    } catch {
+      setLocStatus('error');
+    }
+  }, []);
+  useEffect(() => {
+    loadLocation();
+  }, [loadLocation]);
 
   const pickPhoto = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -107,6 +144,23 @@ export default function Profile() {
           <Text style={styles.rowAction}>Change</Text>
         </Pressable>
 
+        <Text style={styles.sectionLabel}>Your location</Text>
+        <Pressable onPress={loadLocation} style={[styles.row, shadow.soft]}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.rowTitle}>Device location</Text>
+            <Text style={styles.rowSub}>
+              {locStatus === 'loading'
+                ? 'Locating…'
+                : locStatus === 'denied'
+                  ? 'Location permission is off — enable it in Settings.'
+                  : locStatus === 'error'
+                    ? "Couldn't get your location. Tap to retry."
+                    : locText}
+            </Text>
+          </View>
+          <Text style={styles.rowAction}>Refresh</Text>
+        </Pressable>
+
         <Text style={styles.sectionLabel}>Your restaurants</Text>
         <Pressable onPress={() => setRestaurantModal(true)} style={[styles.row, shadow.soft]}>
           <View style={styles.countMark}>
@@ -118,6 +172,22 @@ export default function Profile() {
               {restaurantCount === 0
                 ? 'Pick the spots you want deals from'
                 : `${restaurantCount} selected`}
+            </Text>
+          </View>
+          <Text style={styles.rowAction}>Edit</Text>
+        </Pressable>
+
+        <Text style={styles.sectionLabel}>Food vendors</Text>
+        <Pressable onPress={() => setVendorModal(true)} style={[styles.row, shadow.soft]}>
+          <View style={styles.countMark}>
+            <Text style={styles.countMarkText}>{vendorCount}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.rowTitle}>Choose food vendors</Text>
+            <Text style={styles.rowSub}>
+              {vendorCount === 0
+                ? 'Convenience stores & grocers — deals in the food-vendor view'
+                : `${vendorCount} selected`}
             </Text>
           </View>
           <Text style={styles.rowAction}>Edit</Text>
@@ -146,6 +216,8 @@ export default function Profile() {
           if (user) saveRestaurants(user.id, [...selectedIds]).catch(() => {});
         }}
       />
+
+      <FoodVendorPickerModal visible={vendorModal} onClose={() => setVendorModal(false)} />
     </SafeAreaView>
   );
 }
