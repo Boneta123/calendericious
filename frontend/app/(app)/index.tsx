@@ -10,6 +10,7 @@ import { TopNav } from '../../components/TopNav';
 import { BirthdayModal } from '../../components/BirthdayModal';
 import { useAuth } from '../../context/AuthContext';
 import { useFoodVendors } from '../../context/FoodVendorContext';
+import { useNearMe } from '../../context/NearMeContext';
 import { colors, fonts, radii, shadow, spacing } from '../../theme/theme';
 import { formatBirthday } from '../../utils/birthday';
 import { toDateKey } from '../../utils/date';
@@ -17,6 +18,7 @@ import { toDateKey } from '../../utils/date';
 export default function CalendarHome() {
   const { user, updateBirthday } = useAuth();
   const { foodVendorMode, toggleFoodVendorMode } = useFoodVendors();
+  const { nearMe, toggleNearMe } = useNearMe();
   const [birthdayModal, setBirthdayModal] = useState(false);
 
   const openDay = (date: Date) => router.push(`/(app)/day/${toDateKey(date)}`);
@@ -59,17 +61,30 @@ export default function CalendarHome() {
           <Text style={styles.birthdayChange}>Change</Text>
         </Pressable>
 
-        <Pressable
-          onPress={toggleFoodVendorMode}
-          style={[styles.vendorToggle, foodVendorMode && styles.vendorToggleOn, shadow.soft]}
-          accessibilityRole="button"
-          accessibilityState={{ selected: foodVendorMode }}
-          accessibilityLabel={foodVendorMode ? 'Hide food vendors, show restaurants' : 'Show food vendors'}
-        >
-          <Text style={[styles.vendorToggleText, foodVendorMode && styles.vendorToggleTextOn]}>
-            {foodVendorMode ? 'Hide food vendors' : 'Show food vendors'}
-          </Text>
-        </Pressable>
+        <View style={styles.toggleRow}>
+          <Pressable
+            onPress={toggleFoodVendorMode}
+            style={[styles.vendorToggle, foodVendorMode && styles.vendorToggleOn, shadow.soft]}
+            accessibilityRole="button"
+            accessibilityState={{ selected: foodVendorMode }}
+            accessibilityLabel={foodVendorMode ? 'Hide food vendors, show restaurants' : 'Show food vendors'}
+          >
+            <Text style={[styles.vendorToggleText, foodVendorMode && styles.vendorToggleTextOn]}>
+              {foodVendorMode ? 'Hide food vendors' : 'Show food vendors'}
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={toggleNearMe}
+            style={[styles.vendorToggle, nearMe && styles.vendorToggleOn, shadow.soft]}
+            accessibilityRole="button"
+            accessibilityState={{ selected: nearMe }}
+            accessibilityLabel={nearMe ? 'Hide nearby places' : 'Show nearby places'}
+          >
+            <Text style={[styles.vendorToggleText, nearMe && styles.vendorToggleTextOn]}>
+              {nearMe ? 'Near me: on' : 'Near me'}
+            </Text>
+          </Pressable>
+        </View>
 
         <CalendarGrid onSelectDay={openDay} />
 
@@ -131,13 +146,18 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
+  toggleRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
   vendorToggle: {
-    alignSelf: 'center',
     backgroundColor: colors.tomatoWash,
     borderRadius: radii.pill,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.lg,
-    marginBottom: spacing.md,
     borderWidth: 2,
     borderColor: colors.tomatoWash,
   },

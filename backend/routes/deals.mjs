@@ -49,8 +49,10 @@ router.get('/deals', async (req, res, next) => {
     const deals = await prisma.deal.findMany({
       where,
       include: {
-        restaurant: { select: { id: true, name: true, logoUrl: true } },
-        foodVendor: { select: { id: true, name: true, logoUrl: true } },
+        // `address` distinguishes a specific local place (has one) from an
+        // admin-seeded chain (none) — drives the "Near me" filter client-side.
+        restaurant: { select: { id: true, name: true, logoUrl: true, address: true } },
+        foodVendor: { select: { id: true, name: true, logoUrl: true, address: true } },
       },
       // A food-vendor deal has no restaurant, so ordering by the restaurant
       // relation breaks — order by recency instead.

@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useRestaurantSelection } from '../context/RestaurantSelectionContext';
 import { useFoodVendors } from '../context/FoodVendorContext';
+import { useNearMe } from '../context/NearMeContext';
 import { ApiDeal, dealShowsOnDate, fetchDeals } from '../data/api';
 import { Spinner } from './Spinner';
 import { colors, fonts, radii, shadow, spacing } from '../theme/theme';

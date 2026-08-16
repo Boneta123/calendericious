@@ -72,6 +72,10 @@ export interface ApiDealRestaurant {
   id: string;
   name: string;
   logoUrl: string;
+  /** Street address for a specific local place; null for an admin-seeded chain.
+   *  Drives the "Near me" filter (chains have none and always show). Optional
+   *  because some payloads (e.g. createDeal) omit it. */
+  address?: string | null;
 }
 
 /** One deal row as returned by GET /api/deals. A deal belongs to a restaurant

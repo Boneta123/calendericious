@@ -12,31 +12,53 @@ import { auth, requireSelf } from '../middleware/auth.mjs';
 const router = Router();
 
 // --- Crowdsourcing helpers -------------------------------------------------
-const slugOf = (name) =>
+export const slugOf = (name) =>
   String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-const hostOf = (url) => String(url).replace(/^https?:\/\//, '').replace(/\/.*$/, '');
-const faviconFor = (host) => `https://www.google.com/s2/favicons?domain=${host}&sz=128`;
-const URL_RE = /^https?:\/\/\S+\.\S+/;
+export const hostOf = (url) => String(url).replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+export const faviconFor = (host) => `https://www.google.com/s2/favicons?domain=${host}&sz=128`;
+export const URL_RE = /^https?:\/\/\S+\.\S+/;
 
-/** Shared create/upsert for a restaurant or food vendor (same columns). */
+/**
+ * Create ONE brand row (restaurant or food vendor). The website `url` is the
+ * unique brand key: a place can't be added twice (by a user, or after I add it
+ * in the admin). `address` is OPTIONAL — a user submission carries a specific
+ * address (a local place); an admin-seeded chain has none. Throws a tagged
+ * error `{ status, message }` on validation/duplicate so callers map it to HTTP.
+ */
+export async function createBrand(model, { name, url, address, logoUrl } = {}) {
+  if (typeof name !== 'string' || !name.trim())
+    throw { status: 400, message: 'A name is required.' };
+  if (typeof url !== 'string' || !URL_RE.test(url.trim()))
+    throw { status: 400, message: 'A valid website URL is required.' };
+
+  const id = slugOf(name);
+  if (!id) throw { status: 400, message: 'That name is not usable.' };
+  const host = hostOf(url.trim());
+  const logo = typeof logoUrl === 'string' && logoUrl.trim() ? logoUrl.trim() : faviconFor(host);
+  const addr = typeof address === 'string' && address.trim() ? address.trim() : null;
+
+  // Reject a website that already exists (dedupe by brand key) before insert.
+  const existing = await model.findUnique({ where: { url: url.trim() } });
+  if (existing) throw { status: 409, message: 'This place is already on the app.' };
+
+  try {
+    return await model.create({
+      data: { id, name: name.trim(), url: url.trim(), host, logoUrl: logo, address: addr },
+    });
+  } catch (err) {
+    // P2002 = unique violation (same website, or same slug id from the name).
+    if (err && err.code === 'P2002') throw { status: 409, message: 'This place is already on the app.' };
+    throw err;
+  }
+}
+
+/** Route wrapper: create a brand from the request body, mapping tagged errors. */
 async function createVendor(model, req, res, next) {
   try {
-    const { name, url, address, logoUrl } = req.body ?? {};
-    if (typeof name !== 'string' || !name.trim())
-      return res.status(400).json({ error: 'A name is required.' });
-    if (typeof url !== 'string' || !URL_RE.test(url.trim()))
-      return res.status(400).json({ error: 'A valid website URL is required.' });
-
-    const id = slugOf(name);
-    if (!id) return res.status(400).json({ error: 'That name is not usable.' });
-    const host = hostOf(url.trim());
-    const logo = typeof logoUrl === 'string' && logoUrl.trim() ? logoUrl.trim() : faviconFor(host);
-    const addr = typeof address === 'string' && address.trim() ? address.trim() : null;
-
-    const data = { name: name.trim(), url: url.trim(), host, logoUrl: logo, address: addr };
-    const row = await model.upsert({ where: { id }, create: { id, ...data }, update: data });
+    const row = await createBrand(model, req.body ?? {});
     res.status(201).json(row);
   } catch (err) {
+    if (err && err.status) return res.status(err.status).json({ error: err.message });
     next(err);
   }
 }

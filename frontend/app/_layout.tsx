@@ -21,6 +21,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from '../context/AuthContext';
 import { RestaurantSelectionProvider } from '../context/RestaurantSelectionContext';
 import { FoodVendorProvider } from '../context/FoodVendorContext';
+import { NearMeProvider } from '../context/NearMeContext';
 import { colors } from '../theme/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -48,14 +49,16 @@ export default function RootLayout() {
         <AuthProvider>
           <RestaurantSelectionProvider>
             <FoodVendorProvider>
-              <StatusBar style="dark" />
-              <Stack
-                screenOptions={{
-                  headerShown: false,
-                  contentStyle: { backgroundColor: colors.paper },
-                  animation: 'slide_from_right',
-                }}
-              />
+              <NearMeProvider>
+                <StatusBar style="dark" />
+                <Stack
+                  screenOptions={{
+                    headerShown: false,
+                    contentStyle: { backgroundColor: colors.paper },
+                    animation: 'slide_from_right',
+                  }}
+                />
+              </NearMeProvider>
             </FoodVendorProvider>
           </RestaurantSelectionProvider>
         </AuthProvider>

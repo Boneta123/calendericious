@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 import express, { Router } from 'express';
 
 import { prisma } from './db.mjs';
+import { createBrand } from './routes/restaurants.mjs';
 
 const router = Router();
 
@@ -99,11 +100,30 @@ router.delete('/api/users/:id', gate, async (req, res, next) => {
   }
 });
 
+// POST: add a brand (chain) the SAME way a user submits one, but with only a
+// name + website — NO address. Admin-added chains have no location, so they
+// always show when selected and are exempt from the "Near me" filter. Website
+// is unique, so this also blocks a user later adding the same place. Gated.
+async function adminAddBrand(model, req, res, next) {
+  try {
+    const { name, url } = req.body ?? {};
+    const row = await createBrand(model, { name, url }); // address intentionally omitted
+    res.status(201).json(row);
+  } catch (err) {
+    if (err && err.status) return res.status(err.status).json({ error: err.message });
+    next(err);
+  }
+}
+router.post('/api/restaurants', gate, (req, res, next) => adminAddBrand(prisma.restaurant, req, res, next));
+router.post('/api/food-vendors', gate, (req, res, next) => adminAddBrand(prisma.foodVendor, req, res, next));
+
 // HTML dashboard — self-contained (inline CSS + JS). Styled to match the app.
 router.get('/', gate, (req, res) => {
   const key = process.env.ADMIN_KEY ? encodeURIComponent(String(req.query.key ?? '')) : '';
   const usersUrl = key ? `/admin/api/users?key=${key}` : '/admin/api/users';
-  const keyQs = key ? `?key=${key}` : ''; // appended to the DELETE URL when gated
+  const keyQs = key ? `?key=${key}` : ''; // appended to the DELETE/add URLs when gated
+  const addRestaurantUrl = `/admin/api/restaurants${keyQs}`;
+  const addVendorUrl = `/admin/api/food-vendors${keyQs}`;
   res.type('html').send(`<!doctype html>
 <html lang="en">
 <head>
@@ -179,6 +199,23 @@ router.get('/', gate, (req, res) => {
   .btn-remove:disabled { opacity: .5; cursor: default; }
   .loading, .empty { padding: 28px 16px; color: var(--ink-soft); text-align: center; font-weight: 600; }
 
+  /* Add-brand form */
+  .section-head { font-family: var(--display); font-weight: 800; font-size: 20px; margin: 8px 0 2px; }
+  .section-sub { font-family: var(--body); font-weight: 600; color: var(--ink-soft); font-size: 13px; margin: 0 0 14px; max-width: 70ch; }
+  .add-card { padding: 20px 22px; margin-bottom: 28px; }
+  .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px 16px; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-family: var(--body); font-weight: 800; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--ink-soft); }
+  .field input, .field select { font-family: var(--body); font-size: 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: #fff; color: var(--ink); }
+  .field input:focus, .field select:focus { outline: 2px solid var(--mustard); outline-offset: 1px; }
+  .add-actions { display: flex; align-items: center; gap: 14px; margin-top: 16px; flex-wrap: wrap; }
+  .btn-add { font-family: var(--body); font-weight: 800; font-size: 14px; text-transform: uppercase; letter-spacing: .5px; color: #fff; background: var(--basil); border: none; border-radius: 999px; padding: 12px 22px; cursor: pointer; }
+  .btn-add:hover { background: #2F8A4C; }
+  .btn-add:disabled { opacity: .55; cursor: default; }
+  .add-result { font-family: var(--body); font-weight: 700; font-size: 14px; }
+  .add-result.ok { color: var(--basil); }
+  .add-result.err { color: var(--tomato); }
+
   @media (max-width: 560px) {
     .page { padding: 20px 16px 48px; }
     header.masthead img { height: 44px; }
@@ -207,6 +244,32 @@ router.get('/', gate, (req, res) => {
     <section class="tiles">
       <div class="tile"><div class="n" id="total">–</div><div class="l">Total users</div></div>
       <div class="tile"><div class="n grape" id="active24">–</div><div class="l">Logged in · last 24h</div></div>
+    </section>
+
+    <h2 class="section-head">Add a chain</h2>
+    <p class="section-sub">Add a big-name restaurant or food vendor with just a name + website — no address. The website crowdsources its deals. These always show when a user has them selected; they're exempt from "Near me" (only specific-address places users add appear there). Websites are unique, so this also blocks users re-adding it.</p>
+    <section class="card add-card">
+      <div class="form-grid">
+        <div class="field">
+          <label for="add-name">Name</label>
+          <input id="add-name" type="text" placeholder="McDonald's" autocomplete="off" />
+        </div>
+        <div class="field">
+          <label for="add-website">Website</label>
+          <input id="add-website" type="url" placeholder="https://mcdonalds.com" autocomplete="off" />
+        </div>
+        <div class="field">
+          <label for="add-type">Type</label>
+          <select id="add-type">
+            <option value="restaurant">Restaurant</option>
+            <option value="foodVendor">Food vendor</option>
+          </select>
+        </div>
+      </div>
+      <div class="add-actions">
+        <button class="btn-add" id="add-run">Add</button>
+        <span class="add-result" id="add-result"></span>
+      </div>
     </section>
 
     <section class="card">
@@ -259,6 +322,38 @@ router.get('/', gate, (req, res) => {
       tbody.querySelectorAll('.btn-remove').forEach(btn => btn.addEventListener('click', () => removeUser(btn)));
     })
     .catch(() => { document.getElementById('rows').innerHTML = '<tr><td colspan="8" class="empty">Failed to load users.</td></tr>'; });
+
+  // --- Add a chain (name + website only) ---
+  const ADD_RESTAURANT_URL = ${JSON.stringify(addRestaurantUrl)};
+  const ADD_VENDOR_URL = ${JSON.stringify(addVendorUrl)};
+  const addBtn = document.getElementById('add-run');
+  const addResult = document.getElementById('add-result');
+  addBtn.addEventListener('click', () => {
+    const name = document.getElementById('add-name').value.trim();
+    const url = document.getElementById('add-website').value.trim();
+    const type = document.getElementById('add-type').value;
+    addResult.className = 'add-result';
+    if (!name || !/^https?:\\/\\/\\S+\\.\\S+/.test(url)) {
+      addResult.className = 'add-result err';
+      addResult.textContent = 'Need a name and a valid website URL.';
+      return;
+    }
+    addBtn.disabled = true; addBtn.textContent = 'Adding…';
+    fetch(type === 'foodVendor' ? ADD_VENDOR_URL : ADD_RESTAURANT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, url }),
+    })
+      .then(async (r) => { const b = await r.json().catch(() => ({})); if (!r.ok) throw new Error(b.error || 'Add failed.'); return b; })
+      .then((row) => {
+        addResult.className = 'add-result ok';
+        addResult.textContent = 'Added ' + esc(row.name) + ' (' + type + ').';
+        document.getElementById('add-name').value = '';
+        document.getElementById('add-website').value = '';
+      })
+      .catch((e) => { addResult.className = 'add-result err'; addResult.textContent = e.message || 'Add failed.'; })
+      .finally(() => { addBtn.disabled = false; addBtn.textContent = 'Add'; });
+  });
 
   const DELETE_KEY_QS = ${JSON.stringify(keyQs)};
   function removeUser(btn) {

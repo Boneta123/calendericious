@@ -59,7 +59,7 @@ model User {
 model Restaurant {
   id      String  @id // slug from frontend/data/restaurants.ts slugOf()
   name    String
-  url     String
+  url     String  @unique // website is the brand key — no duplicate submissions
   host    String
   logoUrl String
   accent  String? // brand accent hex (frontend Chain.accent), optional
@@ -78,7 +78,7 @@ model Restaurant {
 model FoodVendor {
   id      String  @id // slug from frontend/data/foodVendors.ts slugOf()
   name    String
-  url     String
+  url     String  @unique // website is the brand key — no duplicate submissions
   host    String
   logoUrl String
   accent  String?
