@@ -8,6 +8,7 @@ import { ApiDeal, dealShowsOnDate, fetchDeals } from '../data/api';
 import { Spinner } from './Spinner';
 import { colors, fonts, radii, shadow, spacing } from '../theme/theme';
 import { buildMonthGrid, isSameDay, MONTH_NAMES, WEEKDAY_LABELS } from '../utils/date';
+import { haversineMi } from '../utils/geo';
 
 interface Props {
   onSelectDay: (date: Date) => void;
@@ -22,6 +23,7 @@ export function CalendarGrid({ onSelectDay }: Props) {
   const { user } = useAuth();
   const { selectedIds } = useRestaurantSelection();
   const { foodVendorSelectedIds, foodVendorMode } = useFoodVendors();
+  const { nearMe, coords, radiusMi } = useNearMe();
   const [deals, setDeals] = useState<ApiDeal[]>([]);
   const [loading, setLoading] = useState(true);
   const today = new Date();
@@ -104,12 +106,22 @@ export function CalendarGrid({ onSelectDay }: Props) {
               const hasDeals =
                 inMonth &&
                 deals.some((deal) => {
-                  // Food-vendor view: only food-vendor deals for selected vendors.
-                  // Restaurant view (default): only restaurant deals for selected restaurants.
-                  const inScope = foodVendorMode
-                    ? !!deal.foodVendorId && foodVendorSelectedIds.has(deal.foodVendorId)
-                    : !!deal.restaurantId && selectedIds.has(deal.restaurantId);
-                  return inScope && dealShowsOnDate(deal, date, user?.birthday);
+                  const brand = foodVendorMode ? deal.foodVendor : deal.restaurant;
+                  const brandId = foodVendorMode ? deal.foodVendorId : deal.restaurantId;
+                  if (!brandId) return false; // not in the current mode
+                  // Admin CHAINS (no address) show when the user has selected them.
+                  // User-added LOCAL spots (with an address) show only when "Near
+                  // me" is on AND within the chosen radius of the device.
+                  const isLocal = !!brand?.address;
+                  const selectedSet = foodVendorMode ? foodVendorSelectedIds : selectedIds;
+                  const visible = isLocal
+                    ? nearMe &&
+                      !!coords &&
+                      typeof brand?.lat === 'number' &&
+                      typeof brand?.lng === 'number' &&
+                      haversineMi(coords.lat, coords.lng, brand.lat, brand.lng) <= radiusMi
+                    : selectedSet.has(brandId);
+                  return visible && dealShowsOnDate(deal, date, user?.birthday);
                 });
               return (
                 <Pressable

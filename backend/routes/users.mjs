@@ -11,7 +11,7 @@ import { prisma } from '../db.mjs';
 import { sendPasswordResetEmail } from '../lib/email.mjs';
 import { hashPassword, verifyPassword } from '../lib/password.mjs';
 import { createSession, destroySession } from '../lib/session.mjs';
-import { auth } from '../middleware/auth.mjs';
+import { auth, requireSelf } from '../middleware/auth.mjs';
 import { rateLimit } from '../middleware/rateLimit.mjs';
 
 const router = Router();
@@ -36,9 +36,13 @@ function safeUser(user, restaurantIds) {
     email: user.email,
     birthday: user.birthday ?? null,
     profilePhoto: user.profilePhoto ?? null,
+    nearMeRadius: user.nearMeRadius ?? 25,
     restaurantIds,
   };
 }
+
+// Allowed "Near me" radii (miles) — must match the frontend options.
+const NEAR_ME_RADII = new Set([10, 25, 50]);
 
 // "MM-DD" month+day (no year). Validated at the app layer; stored as a String.
 const BIRTHDAY_RE = /^\d{2}-\d{2}$/;
@@ -110,6 +114,20 @@ router.get('/auth/me', auth, async (req, res, next) => {
     });
     if (!user) return res.status(401).json({ error: 'Not authenticated.' });
     res.json(safeUser(user, user.restaurants.map((r) => r.restaurantId)));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Save the user's "Near me" radius (miles) so it restores with their session.
+// body: { radiusMi } — must be one of the allowed options.
+router.put('/users/:id/near-me-radius', auth, requireSelf, async (req, res, next) => {
+  try {
+    const radiusMi = Number(req.body?.radiusMi);
+    if (!NEAR_ME_RADII.has(radiusMi))
+      return res.status(400).json({ error: 'Radius must be 10, 25, or 50 miles.' });
+    await prisma.user.update({ where: { id: req.params.id }, data: { nearMeRadius: radiusMi } });
+    res.json({ nearMeRadius: radiusMi });
   } catch (err) {
     next(err);
   }

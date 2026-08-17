@@ -25,7 +25,7 @@ export const URL_RE = /^https?:\/\/\S+\.\S+/;
  * address (a local place); an admin-seeded chain has none. Throws a tagged
  * error `{ status, message }` on validation/duplicate so callers map it to HTTP.
  */
-export async function createBrand(model, { name, url, address, logoUrl } = {}) {
+export async function createBrand(model, { name, url, address, logoUrl, lat, lng } = {}) {
   if (typeof name !== 'string' || !name.trim())
     throw { status: 400, message: 'A name is required.' };
   if (typeof url !== 'string' || !URL_RE.test(url.trim()))
@@ -36,6 +36,10 @@ export async function createBrand(model, { name, url, address, logoUrl } = {}) {
   const host = hostOf(url.trim());
   const logo = typeof logoUrl === 'string' && logoUrl.trim() ? logoUrl.trim() : faviconFor(host);
   const addr = typeof address === 'string' && address.trim() ? address.trim() : null;
+  // Coordinates only make sense for a local spot (an address). Store them when
+  // both are finite; a chain (no address) stays null → excluded from "Near me".
+  const latN = addr && Number.isFinite(Number(lat)) ? Number(lat) : null;
+  const lngN = addr && Number.isFinite(Number(lng)) ? Number(lng) : null;
 
   // Reject a website that already exists (dedupe by brand key) before insert.
   const existing = await model.findUnique({ where: { url: url.trim() } });
@@ -43,7 +47,7 @@ export async function createBrand(model, { name, url, address, logoUrl } = {}) {
 
   try {
     return await model.create({
-      data: { id, name: name.trim(), url: url.trim(), host, logoUrl: logo, address: addr },
+      data: { id, name: name.trim(), url: url.trim(), host, logoUrl: logo, address: addr, lat: latN, lng: lngN },
     });
   } catch (err) {
     // P2002 = unique violation (same website, or same slug id from the name).

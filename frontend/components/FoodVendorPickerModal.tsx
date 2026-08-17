@@ -23,7 +23,9 @@ export function FoodVendorPickerModal({ visible, onClose }: Props) {
     if (!visible) return;
     setLoading(true);
     fetchFoodVendors()
-      .then((v) => setVendors(v))
+      // Only admin-added CHAINS (no address) are selectable. User-added local
+      // spots (with an address) surface via the "Near me" toggle, not here.
+      .then((v) => setVendors(v.filter((x) => !x.address)))
       .catch(() => setVendors([]))
       .finally(() => setLoading(false));
   }, [visible]);

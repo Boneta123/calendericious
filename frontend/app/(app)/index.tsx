@@ -8,9 +8,10 @@ import { FoodScatter } from '../../components/FoodScatter';
 import { FadeInView } from '../../components/FadeInView';
 import { TopNav } from '../../components/TopNav';
 import { BirthdayModal } from '../../components/BirthdayModal';
+import { HowItWorksModal } from '../../components/HowItWorksModal';
 import { useAuth } from '../../context/AuthContext';
 import { useFoodVendors } from '../../context/FoodVendorContext';
-import { useNearMe } from '../../context/NearMeContext';
+import { NEAR_ME_RADIUS_OPTIONS, useNearMe } from '../../context/NearMeContext';
 import { colors, fonts, radii, shadow, spacing } from '../../theme/theme';
 import { formatBirthday } from '../../utils/birthday';
 import { toDateKey } from '../../utils/date';
@@ -18,8 +19,9 @@ import { toDateKey } from '../../utils/date';
 export default function CalendarHome() {
   const { user, updateBirthday } = useAuth();
   const { foodVendorMode, toggleFoodVendorMode } = useFoodVendors();
-  const { nearMe, toggleNearMe } = useNearMe();
+  const { nearMe, toggleNearMe, radiusMi, setRadiusMi } = useNearMe();
   const [birthdayModal, setBirthdayModal] = useState(false);
+  const [howItWorks, setHowItWorks] = useState(false);
 
   const openDay = (date: Date) => router.push(`/(app)/day/${toDateKey(date)}`);
 
@@ -81,10 +83,40 @@ export default function CalendarHome() {
             accessibilityLabel={nearMe ? 'Hide nearby places' : 'Show nearby places'}
           >
             <Text style={[styles.vendorToggleText, nearMe && styles.vendorToggleTextOn]}>
-              {nearMe ? 'Near me: on' : 'Near me'}
+              Near me
             </Text>
           </Pressable>
         </View>
+
+        {nearMe && (
+          <View style={styles.radiusRow}>
+            <Text style={styles.radiusLabel}>Within</Text>
+            {NEAR_ME_RADIUS_OPTIONS.map((mi) => {
+              const on = radiusMi === mi;
+              return (
+                <Pressable
+                  key={mi}
+                  onPress={() => setRadiusMi(mi)}
+                  style={[styles.radiusPill, on && styles.radiusPillOn]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                  accessibilityLabel={`${mi} miles`}
+                >
+                  <Text style={[styles.radiusPillText, on && styles.radiusPillTextOn]}>{mi} mi</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+
+        <Pressable
+          onPress={() => setHowItWorks(true)}
+          style={styles.howLink}
+          accessibilityRole="button"
+          accessibilityLabel="How it works"
+        >
+          <Text style={styles.howLinkText}>How it works</Text>
+        </Pressable>
 
         <CalendarGrid onSelectDay={openDay} />
 
@@ -108,6 +140,8 @@ export default function CalendarHome() {
         onClose={() => setBirthdayModal(false)}
         onSave={updateBirthday}
       />
+
+      <HowItWorksModal visible={howItWorks} onClose={() => setHowItWorks(false)} />
     </SafeAreaView>
   );
 }
@@ -160,6 +194,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     borderWidth: 2,
     borderColor: colors.tomatoWash,
+  },
+  radiusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  radiusLabel: { fontFamily: fonts.bodySemi, fontSize: 13, color: colors.inkSoft },
+  radiusPill: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.pill,
+    borderWidth: 1.5,
+    borderColor: colors.line,
+    backgroundColor: colors.card,
+  },
+  radiusPillOn: { borderColor: colors.tomato, backgroundColor: colors.tomatoWash },
+  radiusPillText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.inkSoft },
+  radiusPillTextOn: { color: colors.tomatoDeep },
+  howLink: { alignSelf: 'center', marginBottom: spacing.md },
+  howLinkText: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 13,
+    color: colors.tomato,
+    textDecorationLine: 'underline',
   },
   vendorToggleOn: { backgroundColor: colors.tomato, borderColor: colors.tomato },
   vendorToggleText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.tomatoDeep },

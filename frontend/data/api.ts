@@ -73,9 +73,12 @@ export interface ApiDealRestaurant {
   name: string;
   logoUrl: string;
   /** Street address for a specific local place; null for an admin-seeded chain.
-   *  Drives the "Near me" filter (chains have none and always show). Optional
-   *  because some payloads (e.g. createDeal) omit it. */
+   *  Distinguishes a local spot from a chain. Optional because some payloads
+   *  (e.g. createDeal) omit it. */
   address?: string | null;
+  /** Coordinates of a local spot (for the "Near me" distance filter); null on chains. */
+  lat?: number | null;
+  lng?: number | null;
 }
 
 /** One deal row as returned by GET /api/deals. A deal belongs to a restaurant
@@ -140,11 +143,14 @@ export function fetchUserProfile(id: string): Promise<PublicProfile> {
 
 // --- Place autocomplete (via the backend proxy → LocationIQ) ---------------
 
-/** One suggestion: `primary` = place/name, `secondary` = full formatted address. */
+/** One suggestion: `primary` = place/name, `secondary` = full formatted address,
+ *  plus the place's coordinates (stored on submit for the "Near me" filter). */
 export interface PlaceSuggestion {
   placeId: string;
   primary: string;
   secondary: string;
+  lat: number;
+  lng: number;
 }
 
 /** Food-POI suggestions of `kind` ('restaurant' | 'food'), biased to `coords`
@@ -170,6 +176,8 @@ export function createRestaurant(input: {
   url: string;
   address: string;
   logoUrl: string;
+  lat: number;
+  lng: number;
 }): Promise<ApiDealRestaurant> {
   return sendJson<ApiDealRestaurant>('/api/restaurants', 'POST', input);
 }
@@ -180,6 +188,8 @@ export function createFoodVendor(input: {
   url: string;
   address: string;
   logoUrl: string;
+  lat: number;
+  lng: number;
 }): Promise<ApiDealRestaurant> {
   return sendJson<ApiDealRestaurant>('/api/food-vendors', 'POST', input);
 }
@@ -221,6 +231,7 @@ export interface AuthUser {
   email: string;
   birthday: string | null; // "MM-DD" month+day of the user's birthday
   profilePhoto: string | null;
+  nearMeRadius: number; // saved "Near me" radius in miles (10/25/50)
   restaurantIds: string[];
 }
 
@@ -317,6 +328,11 @@ export function saveProfilePhoto(
 /** Persist the user's birthday ("MM-DD"); returns the saved value. */
 export function saveBirthday(userId: string, birthday: string): Promise<{ birthday: string }> {
   return sendJson<{ birthday: string }>(`/api/users/${userId}/birthday`, 'PUT', { birthday });
+}
+
+/** Persist the user's "Near me" radius (miles); returns the saved value. */
+export function saveNearMeRadius(userId: string, radiusMi: number): Promise<{ nearMeRadius: number }> {
+  return sendJson<{ nearMeRadius: number }>(`/api/users/${userId}/near-me-radius`, 'PUT', { radiusMi });
 }
 
 /** Persist the user's chosen restaurants; returns the saved ids. */

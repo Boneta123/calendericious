@@ -43,6 +43,7 @@ model User {
   passwordHash String // hash only — never plaintext; hashed at the app layer
   profilePhoto String? // URL/path to the image, not binary
   birthday     String? // "MM-DD" month+day of the user's birthday (no year)
+  nearMeRadius Int      @default(25) // saved "Near me" radius in miles (10/25/50)
   lastLoginAt  DateTime? // set on each successful login (admin dashboard)
   resetCodeHash      String?   // hash of the 6-digit password-reset code (single-use)
   resetCodeExpiresAt DateTime? // when the reset code expires (~15 min)
@@ -64,6 +65,8 @@ model Restaurant {
   logoUrl String
   accent  String? // brand accent hex (frontend Chain.accent), optional
   address String? // street address (crowdsourced submissions)
+  lat     Float? // set for a user-added local spot (from the picked place); null for a chain
+  lng     Float?
 
   deals Deal[]
   users UserRestaurant[]
@@ -83,6 +86,8 @@ model FoodVendor {
   logoUrl String
   accent  String?
   address String? // street address (crowdsourced submissions)
+  lat     Float? // set for a user-added local spot (from the picked place); null for a chain
+  lng     Float?
 
   deals Deal[]
 

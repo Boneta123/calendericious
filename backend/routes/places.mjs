@@ -105,9 +105,17 @@ router.get('/places/autocomplete', auth, placesLimiter, async (req, res, next) =
         const primary =
           r.display_place || r.address?.name || String(r.display_name || '').split(',')[0].trim();
         const secondary = r.display_address || r.display_name || '';
-        return { placeId: String(r.place_id ?? r.osm_id ?? ''), primary, secondary };
+        // Carry the picked place's coordinates so submissions can store them
+        // (powers the "Near me" distance filter).
+        return {
+          placeId: String(r.place_id ?? r.osm_id ?? ''),
+          primary,
+          secondary,
+          lat: Number(r.lat),
+          lng: Number(r.lon),
+        };
       })
-      .filter((x) => x.primary && x.secondary)
+      .filter((x) => x.primary && x.secondary && Number.isFinite(x.lat) && Number.isFinite(x.lng))
       .slice(0, 8);
     res.json(out);
   } catch (err) {

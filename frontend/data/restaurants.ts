@@ -12,6 +12,9 @@ export interface Restaurant {
   url: string;
   host: string;
   logoUrl: string;
+  /** Street address for a user-added local spot; null for an admin-added chain.
+   *  Only chains (no address) are selectable; local spots appear via "Near me". */
+  address?: string | null;
 }
 
 /** The restaurant catalog from the DB. Throws on a non-2xx response. */

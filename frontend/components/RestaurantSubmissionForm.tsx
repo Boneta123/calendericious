@@ -14,6 +14,8 @@ export interface RestaurantDraft {
   url: string;
   address: string;
   logoUrl: string;
+  lat: number;
+  lng: number;
 }
 
 function hostOf(url: string): string {
@@ -38,7 +40,7 @@ export function RestaurantSubmissionForm() {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
   const [searching, setSearching] = useState(false);
-  const [selected, setSelected] = useState<{ name: string; address: string } | null>(null);
+  const [selected, setSelected] = useState<{ name: string; address: string; lat: number; lng: number } | null>(null);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | undefined>(undefined);
   // Website (for the logo) — prefilled from Places when available, still editable.
   const [url, setUrl] = useState('');
@@ -90,8 +92,8 @@ export function RestaurantSubmissionForm() {
   const noResults = !searching && query.trim().length >= 2 && suggestions.length === 0;
 
   const pick = (s: PlaceSuggestion) => {
-    // LocationIQ suggestions already include the full address — no extra lookup.
-    setSelected({ name: s.primary, address: s.secondary });
+    // LocationIQ suggestions already include the full address + coords.
+    setSelected({ name: s.primary, address: s.secondary, lat: s.lat, lng: s.lng });
     setQuery('');
     setSuggestions([]);
     setErrors((e) => ({ ...e, place: '' }));
@@ -120,6 +122,8 @@ export function RestaurantSubmissionForm() {
       url: url.trim(),
       address: selected.address,
       logoUrl,
+      lat: selected.lat,
+      lng: selected.lng,
     };
     setSubmitting(true);
     setFormError(null);

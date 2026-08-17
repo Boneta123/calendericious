@@ -45,7 +45,9 @@ export function RestaurantPickerModal({
     if (!visible) return;
     setLoading(true);
     fetchRestaurants()
-      .then((r) => setRestaurants(r))
+      // Only admin-added CHAINS (no address) are selectable. User-added local
+      // spots (with an address) surface via the "Near me" toggle, not here.
+      .then((r) => setRestaurants(r.filter((x) => !x.address)))
       .catch(() => setRestaurants([]))
       .finally(() => setLoading(false));
   }, [visible]);

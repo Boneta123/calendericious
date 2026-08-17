@@ -10,7 +10,9 @@ import { Spinner } from '../../../components/Spinner';
 import { useAuth } from '../../../context/AuthContext';
 import { useRestaurantSelection } from '../../../context/RestaurantSelectionContext';
 import { useFoodVendors } from '../../../context/FoodVendorContext';
+import { useNearMe } from '../../../context/NearMeContext';
 import { ApiDeal, dealShowsOnDate, fetchDeals } from '../../../data/api';
+import { haversineMi } from '../../../utils/geo';
 import { colors, fonts, radii, spacing } from '../../../theme/theme';
 import { formatLongDate, fromDateKey, MONTH_NAMES, WEEKDAY_FULL } from '../../../utils/date';
 
@@ -21,6 +23,7 @@ export default function DayDetail() {
   const { user } = useAuth();
   const { selectedIds } = useRestaurantSelection();
   const { foodVendorSelectedIds, foodVendorMode } = useFoodVendors();
+  const { nearMe, coords, radiusMi } = useNearMe();
 
   const date = useMemo(() => fromDateKey(dateKey ?? ''), [dateKey]);
   const [allDeals, setAllDeals] = useState<ApiDeal[]>([]);
@@ -47,12 +50,23 @@ export default function DayDetail() {
   const deals = useMemo(
     () =>
       allDeals.filter((d) => {
-        const inScope = foodVendorMode
-          ? !!d.foodVendorId && foodVendorSelectedIds.has(d.foodVendorId)
-          : !!d.restaurantId && selectedIds.has(d.restaurantId);
-        return inScope && dealShowsOnDate(d, date, user?.birthday);
+        const brand = foodVendorMode ? d.foodVendor : d.restaurant;
+        const brandId = foodVendorMode ? d.foodVendorId : d.restaurantId;
+        if (!brandId) return false; // not in the current mode
+        // Admin CHAINS (no address) show when selected. User-added LOCAL spots
+        // (with an address) show only when "Near me" is on AND within range.
+        const isLocal = !!brand?.address;
+        const selectedSet = foodVendorMode ? foodVendorSelectedIds : selectedIds;
+        const visible = isLocal
+          ? nearMe &&
+            !!coords &&
+            typeof brand?.lat === 'number' &&
+            typeof brand?.lng === 'number' &&
+            haversineMi(coords.lat, coords.lng, brand.lat, brand.lng) <= radiusMi
+          : selectedSet.has(brandId);
+        return visible && dealShowsOnDate(d, date, user?.birthday);
       }),
-    [allDeals, date, selectedIds, foodVendorSelectedIds, foodVendorMode, user?.birthday],
+    [allDeals, date, selectedIds, foodVendorSelectedIds, foodVendorMode, nearMe, coords, radiusMi, user?.birthday],
   );
 
   return (

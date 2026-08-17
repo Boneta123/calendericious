@@ -16,6 +16,7 @@ import {
   logout as logoutApi,
   restoreSession,
   saveBirthday,
+  saveNearMeRadius,
 } from '../data/api';
 
 export type User = AuthUser;
@@ -33,6 +34,7 @@ interface AuthContextValue {
   logOut: () => void;
   updateBirthday: (birthday: string) => void;
   updatePhoto: (photo: string) => void;
+  updateNearMeRadius: (radiusMi: number) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -79,6 +81,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
       updatePhoto: (photo) =>
         setUser((prev) => (prev ? { ...prev, profilePhoto: photo } : prev)),
+      updateNearMeRadius: (radiusMi) => {
+        setUser((prev) => {
+          if (!prev) return prev;
+          saveNearMeRadius(prev.id, radiusMi).catch(() => {}); // best-effort persist
+          return { ...prev, nearMeRadius: radiusMi };
+        });
+      },
     }),
     [user, initializing],
   );

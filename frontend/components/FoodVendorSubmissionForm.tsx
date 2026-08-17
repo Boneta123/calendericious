@@ -15,6 +15,8 @@ export interface FoodVendorDraft {
   url: string;
   address: string;
   logoUrl: string;
+  lat: number;
+  lng: number;
 }
 
 function hostOf(url: string): string {
@@ -38,7 +40,7 @@ export function FoodVendorSubmissionForm() {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
   const [searching, setSearching] = useState(false);
-  const [selected, setSelected] = useState<{ name: string; address: string } | null>(null);
+  const [selected, setSelected] = useState<{ name: string; address: string; lat: number; lng: number } | null>(null);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | undefined>(undefined);
   const [url, setUrl] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -88,7 +90,7 @@ export function FoodVendorSubmissionForm() {
 
   const pick = (s: PlaceSuggestion) => {
     // LocationIQ suggestions already include the full address — no extra lookup.
-    setSelected({ name: s.primary, address: s.secondary });
+    setSelected({ name: s.primary, address: s.secondary, lat: s.lat, lng: s.lng });
     setQuery('');
     setSuggestions([]);
     setErrors((e) => ({ ...e, place: '' }));
@@ -117,6 +119,8 @@ export function FoodVendorSubmissionForm() {
       url: url.trim(),
       address: selected.address,
       logoUrl,
+      lat: selected.lat,
+      lng: selected.lng,
     };
     setSubmitting(true);
     setFormError(null);

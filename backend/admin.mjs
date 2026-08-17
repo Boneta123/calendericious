@@ -19,9 +19,28 @@ import { fileURLToPath } from 'node:url';
 import express, { Router } from 'express';
 
 import { prisma } from './db.mjs';
-import { createBrand } from './routes/restaurants.mjs';
+import { createBrand, URL_RE } from './routes/restaurants.mjs';
 
 const router = Router();
+
+/** Soft "is this a real, live website?" check: we only need SOME HTTP response
+ *  (the domain resolves and serves) — many big sites answer bots with 403, so
+ *  a non-2xx status still counts as real. Returns false only on a network/DNS
+ *  failure or timeout. HEAD first, GET fallback for servers that reject HEAD. */
+async function urlReachable(url) {
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), 6000);
+  try {
+    let res = await fetch(url, { method: 'HEAD', redirect: 'follow', signal: ac.signal });
+    if (res.status === 405 || res.status === 501)
+      res = await fetch(url, { method: 'GET', redirect: 'follow', signal: ac.signal });
+    return !!res; // any HTTP response → the domain is real and reachable
+  } catch {
+    return false; // DNS failure / connection refused / timeout
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 // Serve the food-character art (public — not sensitive, so outside the gate).
 const charactersDir = fileURLToPath(
@@ -107,6 +126,11 @@ router.delete('/api/users/:id', gate, async (req, res, next) => {
 async function adminAddBrand(model, req, res, next) {
   try {
     const { name, url } = req.body ?? {};
+    if (typeof url !== 'string' || !URL_RE.test(url.trim()))
+      return res.status(400).json({ error: 'A valid website URL is required.' });
+    // Verify the site is real/live before saving (blocks typos & dead domains).
+    if (!(await urlReachable(url.trim())))
+      return res.status(400).json({ error: "Couldn't reach that website — check the URL." });
     const row = await createBrand(model, { name, url }); // address intentionally omitted
     res.status(201).json(row);
   } catch (err) {
