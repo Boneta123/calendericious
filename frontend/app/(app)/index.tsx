@@ -18,7 +18,7 @@ import { toDateKey } from '../../utils/date';
 
 export default function CalendarHome() {
   const { user, updateBirthday } = useAuth();
-  const { foodVendorMode, toggleFoodVendorMode } = useFoodVendors();
+  const { foodVendorMode, setFoodVendorMode } = useFoodVendors();
   const { nearMe, toggleNearMe, radiusMi, setRadiusMi } = useNearMe();
   const [birthdayModal, setBirthdayModal] = useState(false);
   const [howItWorks, setHowItWorks] = useState(false);
@@ -31,12 +31,31 @@ export default function CalendarHome() {
       <View style={styles.content}>
         <TopNav />
         <BrandLogo width={150} style={{ marginBottom: spacing.md }} />
-        {/* Greeting + birthday chip */}
+        {/* Header: greeting + compact birthday chip, with help "?" + avatar */}
         <FadeInView delay={40} style={styles.topRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.hello}>Hey {user?.displayName}</Text>
             <Text style={styles.tagline}>What's on the menu this month?</Text>
+            <Pressable
+              onPress={() => setBirthdayModal(true)}
+              style={[styles.birthdayPill, shadow.soft]}
+              accessibilityRole="button"
+              accessibilityLabel={user?.birthday ? 'Change your birthday' : 'Add your birthday'}
+            >
+              <Text style={styles.birthdayPillText} numberOfLines={1}>
+                {user?.birthday ? `Birthday · ${formatBirthday(user.birthday)}` : 'Add your birthday'}
+              </Text>
+              <Text style={styles.birthdayPillChevron}>›</Text>
+            </Pressable>
           </View>
+          <Pressable
+            onPress={() => setHowItWorks(true)}
+            style={[styles.helpBtn, shadow.soft]}
+            accessibilityRole="button"
+            accessibilityLabel="How it works"
+          >
+            <Text style={styles.helpBtnText}>?</Text>
+          </Pressable>
           <Pressable
             onPress={() => router.push('/(app)/profile')}
             style={styles.avatar}
@@ -52,39 +71,36 @@ export default function CalendarHome() {
           </Pressable>
         </FadeInView>
 
-        <Pressable
-          onPress={() => setBirthdayModal(true)}
-          style={[styles.birthdayChip, shadow.soft]}
-          accessibilityLabel="Change your birthday"
-        >
-          <Text style={styles.birthdayText}>
-            {user?.birthday ? `Birthday ${formatBirthday(user.birthday)}` : 'Add your birthday'}
-          </Text>
-          <Text style={styles.birthdayChange}>Change</Text>
-        </Pressable>
-
-        <View style={styles.toggleRow}>
-          <Pressable
-            onPress={toggleFoodVendorMode}
-            style={[styles.vendorToggle, foodVendorMode && styles.vendorToggleOn, shadow.soft]}
-            accessibilityRole="button"
-            accessibilityState={{ selected: foodVendorMode }}
-            accessibilityLabel={foodVendorMode ? 'Hide food vendors, show restaurants' : 'Show food vendors'}
-          >
-            <Text style={[styles.vendorToggleText, foodVendorMode && styles.vendorToggleTextOn]}>
-              {foodVendorMode ? 'Hide food vendors' : 'Show food vendors'}
-            </Text>
-          </Pressable>
+        {/* Slim control bar right above the calendar: mode segmented control + Near me */}
+        <View style={styles.controlBar}>
+          <View style={styles.segment}>
+            <Pressable
+              onPress={() => setFoodVendorMode(false)}
+              style={[styles.segmentBtn, !foodVendorMode && styles.segmentBtnOn]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: !foodVendorMode }}
+              accessibilityLabel="Show restaurants"
+            >
+              <Text style={[styles.segmentText, !foodVendorMode && styles.segmentTextOn]}>Restaurants</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setFoodVendorMode(true)}
+              style={[styles.segmentBtn, foodVendorMode && styles.segmentBtnOn]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: foodVendorMode }}
+              accessibilityLabel="Show food vendors"
+            >
+              <Text style={[styles.segmentText, foodVendorMode && styles.segmentTextOn]}>Food vendors</Text>
+            </Pressable>
+          </View>
           <Pressable
             onPress={toggleNearMe}
-            style={[styles.vendorToggle, nearMe && styles.vendorToggleOn, shadow.soft]}
+            style={[styles.nearBtn, nearMe && styles.nearBtnOn]}
             accessibilityRole="button"
             accessibilityState={{ selected: nearMe }}
-            accessibilityLabel={nearMe ? 'Hide nearby places' : 'Show nearby places'}
+            accessibilityLabel={nearMe ? 'Turn off nearby places' : 'Show nearby places'}
           >
-            <Text style={[styles.vendorToggleText, nearMe && styles.vendorToggleTextOn]}>
-              Near me
-            </Text>
+            <Text style={[styles.nearText, nearMe && styles.nearTextOn]}>Near me</Text>
           </Pressable>
         </View>
 
@@ -97,6 +113,7 @@ export default function CalendarHome() {
                 <Pressable
                   key={mi}
                   onPress={() => setRadiusMi(mi)}
+                  hitSlop={8}
                   style={[styles.radiusPill, on && styles.radiusPillOn]}
                   accessibilityRole="button"
                   accessibilityState={{ selected: on }}
@@ -108,15 +125,6 @@ export default function CalendarHome() {
             })}
           </View>
         )}
-
-        <Pressable
-          onPress={() => setHowItWorks(true)}
-          style={styles.howLink}
-          accessibilityRole="button"
-          accessibilityLabel="How it works"
-        >
-          <Text style={styles.howLinkText}>How it works</Text>
-        </Pressable>
 
         <CalendarGrid onSelectDay={openDay} />
 
@@ -149,7 +157,7 @@ export default function CalendarHome() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.paper },
   content: { flex: 1, padding: spacing.xl, paddingBottom: spacing.lg },
-  topRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.lg },
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.lg },
   hello: { fontFamily: fonts.display, fontSize: 28, color: colors.ink },
   tagline: { fontFamily: fonts.body, fontSize: 15, color: colors.inkSoft, marginTop: 2 },
   avatar: {
@@ -163,42 +171,74 @@ const styles = StyleSheet.create({
   },
   avatarText: { fontFamily: fonts.display, fontSize: 20, color: '#FFFFFF' },
   avatarImage: { width: 46, height: 46 },
-  birthdayChip: {
+  // Compact birthday chip tucked under the greeting (was a full-width card).
+  birthdayPill: {
+    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
     backgroundColor: colors.card,
     borderRadius: radii.pill,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.lg,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.sm,
   },
-  birthdayText: { flex: 1, fontFamily: fonts.bodyBold, fontSize: 15, color: colors.ink },
-  birthdayChange: {
-    fontFamily: fonts.bodyBold,
-    fontSize: 13,
-    color: colors.tomato,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  toggleRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  birthdayPillText: { fontFamily: fonts.bodyBold, fontSize: 12.5, color: colors.ink },
+  birthdayPillChevron: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.tomato, marginTop: -2 },
+  // Round "?" help button (opens How it works) — sits by the avatar in the header.
+  helpBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: radii.pill,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.line,
+    alignItems: 'center',
     justifyContent: 'center',
+  },
+  helpBtnText: { fontFamily: fonts.display, fontSize: 20, color: colors.inkSoft, marginTop: -2 },
+  // Slim control bar above the calendar: segmented mode switch + Near me.
+  controlBar: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
     gap: spacing.sm,
     marginBottom: spacing.md,
   },
-  vendorToggle: {
+  segment: {
+    flex: 1,
+    flexDirection: 'row',
     backgroundColor: colors.tomatoWash,
     borderRadius: radii.pill,
-    paddingVertical: spacing.sm,
+    padding: 3,
+  },
+  segmentBtn: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: radii.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+  },
+  segmentBtnOn: { backgroundColor: colors.tomato, ...shadow.soft },
+  segmentText: { fontFamily: fonts.bodyBold, fontSize: 13.5, color: colors.tomatoDeep },
+  segmentTextOn: { color: '#FFFFFF' },
+  nearBtn: {
+    minHeight: 46,
     paddingHorizontal: spacing.lg,
+    borderRadius: radii.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.tomatoWash,
     borderWidth: 2,
     borderColor: colors.tomatoWash,
   },
+  nearBtnOn: { backgroundColor: colors.tomato, borderColor: colors.tomato },
+  nearText: { fontFamily: fonts.bodyBold, fontSize: 13.5, color: colors.tomatoDeep },
+  nearTextOn: { color: '#FFFFFF' },
   radiusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
     gap: spacing.sm,
     marginBottom: spacing.md,
   },
@@ -214,22 +254,6 @@ const styles = StyleSheet.create({
   radiusPillOn: { borderColor: colors.tomato, backgroundColor: colors.tomatoWash },
   radiusPillText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.inkSoft },
   radiusPillTextOn: { color: colors.tomatoDeep },
-  howLink: { alignSelf: 'center', marginBottom: spacing.md },
-  howLinkText: {
-    fontFamily: fonts.bodyBold,
-    fontSize: 13,
-    color: colors.tomato,
-    textDecorationLine: 'underline',
-  },
-  vendorToggleOn: { backgroundColor: colors.tomato, borderColor: colors.tomato },
-  vendorToggleText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.tomatoDeep },
-  vendorToggleTextOn: { color: '#FFFFFF' },
-  rangeLabel: {
-    fontFamily: fonts.display,
-    fontSize: 20,
-    color: colors.ink,
-    marginBottom: spacing.sm,
-  },
   legend: {
     flexDirection: 'row',
     alignItems: 'center',

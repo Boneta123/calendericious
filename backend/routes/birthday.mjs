@@ -1,6 +1,7 @@
 /**
- * Birthday routes. The user's birthday is stored as "MM-DD" (month+day, no year).
- * Both routes are self-only (a user can read/update only their own birthday).
+ * Birthday route. The user's birthday is stored as "MM-DD" (month+day, no year).
+ * Self-only — a user can update only their own birthday (the value is also
+ * returned in the auth-user object, so there's no separate GET).
  */
 import { Router } from 'express';
 import { prisma } from '../db.mjs';
@@ -10,20 +11,6 @@ const router = Router();
 
 // "MM-DD" month+day (no year).
 const BIRTHDAY_RE = /^\d{2}-\d{2}$/;
-
-// Get the user's birthday.
-router.get('/users/:id/birthday', auth, requireSelf, async (req, res, next) => {
-  try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.params.id },
-      select: { birthday: true },
-    });
-    if (!user) return res.status(404).json({ error: 'User not found.' });
-    res.json({ birthday: user.birthday ?? null });
-  } catch (err) {
-    next(err);
-  }
-});
 
 // Update the user's birthday. body: { birthday: "MM-DD" }
 router.put('/users/:id/birthday', auth, requireSelf, async (req, res, next) => {
