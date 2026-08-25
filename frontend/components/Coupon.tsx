@@ -14,7 +14,7 @@ import { TimeWindowBar } from './TimeWindowBar';
  * that carries the time window + a Rewards badge when required. Works for a
  * restaurant OR food-vendor deal (see `dealVendor`).
  */
-export function Coupon({ item }: { item: ApiDeal }) {
+export function Coupon({ item, onDelete }: { item: ApiDeal; onDelete?: () => void }) {
   const vendor = dealVendor(item);
   const allDay = item.startTime === null;
 
@@ -85,6 +85,17 @@ export function Coupon({ item }: { item: ApiDeal }) {
           <View style={styles.headerText}>
             <Text style={styles.chain}>{vendor.name}</Text>
           </View>
+          {onDelete && (
+            <Pressable
+              onPress={onDelete}
+              style={styles.deleteBtn}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Delete this deal"
+            >
+              <Text style={styles.deleteBtnText}>Delete</Text>
+            </Pressable>
+          )}
         </View>
 
         <Text style={styles.title}>{item.title}</Text>
@@ -184,6 +195,20 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.lg },
   logoChip: { marginRight: spacing.md },
   headerText: { flex: 1 },
+  deleteBtn: {
+    borderRadius: radii.pill,
+    borderWidth: 1.5,
+    borderColor: colors.tomato,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+  },
+  deleteBtnText: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 12,
+    color: colors.tomato,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   chain: {
     fontFamily: fonts.monoBold,
     fontSize: 12,

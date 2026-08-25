@@ -147,6 +147,11 @@ export function fetchUserProfile(id: string): Promise<PublicProfile> {
   return sendJson<PublicProfile>(`/api/users/${id}/public`, 'GET');
 }
 
+/** Delete a deal you posted. Server enforces creator-ownership (403 otherwise). */
+export function deleteDeal(id: string): Promise<{ ok: boolean }> {
+  return sendJson<{ ok: boolean }>(`/api/deals/${id}`, 'DELETE');
+}
+
 // --- Place autocomplete (via the backend proxy → LocationIQ) ---------------
 
 /** One suggestion: `primary` = place/name, `secondary` = full formatted address,

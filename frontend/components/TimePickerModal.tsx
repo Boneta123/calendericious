@@ -15,6 +15,10 @@ interface Props {
   onSelect: (time: string) => void;
   onClear: () => void;
   onClose: () => void;
+  /** End-time mode: 12:00 AM is the LATEST option (midnight / end of day), and
+   *  only times strictly after `startTime` are offered. */
+  isEnd?: boolean;
+  startTime?: string | null;
 }
 
 // 48 half-hour slots: "00:00", "00:30", … "23:30".
@@ -24,14 +28,37 @@ const SLOTS: string[] = Array.from({ length: 48 }, (_, i) => {
   return `${String(h).padStart(2, '0')}:${m}`;
 });
 
-export function TimePickerModal({ visible, title = 'Pick a time', value, onSelect, onClear, onClose }: Props) {
+/** Minutes since midnight; in end-mode "00:00" is midnight/end-of-day (1440). */
+const toMin = (s: string, asEnd = false) => {
+  const [h, m] = s.split(':').map(Number);
+  const v = h * 60 + m;
+  return asEnd && v === 0 ? 1440 : v;
+};
+
+export function TimePickerModal({
+  visible,
+  title = 'Pick a time',
+  value,
+  onSelect,
+  onClear,
+  onClose,
+  isEnd = false,
+  startTime,
+}: Props) {
+  // Start picker: 12:00 AM → 11:30 PM. End picker: 12:30 AM → 12:00 AM (midnight
+  // last), and only slots after the chosen start.
+  let slots = isEnd ? [...SLOTS.slice(1), '00:00'] : SLOTS;
+  if (isEnd && startTime) {
+    const startMin = toMin(startTime);
+    slots = slots.filter((s) => toMin(s, true) > startMin);
+  }
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.card} onPress={() => {}}>
           <Text style={styles.title}>{title}</Text>
           <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
-            {SLOTS.map((slot) => {
+            {slots.map((slot) => {
               const on = value === slot;
               return (
                 <Pressable

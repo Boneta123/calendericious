@@ -3,16 +3,25 @@ import * as ImagePicker from 'expo-image-picker';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import * as Location from 'expo-location';
 import { useCallback, useEffect, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Coupon } from '../../components/Coupon';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { RestaurantPickerModal } from '../../components/RestaurantPickerModal';
 import { FoodVendorPickerModal } from '../../components/FoodVendorPickerModal';
 import { BirthdayModal } from '../../components/BirthdayModal';
+import { Spinner } from '../../components/Spinner';
 import { useAuth } from '../../context/AuthContext';
 import { useRestaurantSelection } from '../../context/RestaurantSelectionContext';
 import { useFoodVendors } from '../../context/FoodVendorContext';
-import { saveFoodVendors, saveProfilePhoto, saveRestaurants } from '../../data/api';
+import {
+  ApiDeal,
+  deleteDeal,
+  fetchUserProfile,
+  saveFoodVendors,
+  saveProfilePhoto,
+  saveRestaurants,
+} from '../../data/api';
 import { colors, fonts, radii, shadow, spacing } from '../../theme/theme';
 import { formatBirthday } from '../../utils/birthday';
 
@@ -30,6 +39,43 @@ export default function Profile() {
   const [vendorModal, setVendorModal] = useState(false);
   // Hydrate from the saved photo (a compressed base64 data URI returned at login).
   const [photoUri, setPhotoUri] = useState<string | null>(user?.profilePhoto ?? null);
+
+  // The user's own posted deals (reuses the public-profile endpoint on self).
+  const [myDeals, setMyDeals] = useState<ApiDeal[]>([]);
+  const [dealsStatus, setDealsStatus] = useState<'loading' | 'error' | 'success'>('loading');
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    setDealsStatus('loading');
+    fetchUserProfile(user.id)
+      .then((p) => {
+        if (!active) return;
+        setMyDeals(p.deals);
+        setDealsStatus('success');
+      })
+      .catch(() => active && setDealsStatus('error'));
+    return () => {
+      active = false;
+    };
+  }, [user?.id]);
+
+  const confirmDelete = (deal: ApiDeal) => {
+    Alert.alert(
+      'Delete this deal?',
+      `"${deal.title}" will be permanently removed. This can't be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => removeDeal(deal.id) },
+      ],
+    );
+  };
+  const removeDeal = (id: string) => {
+    const prev = myDeals;
+    setMyDeals((ds) => ds.filter((d) => d.id !== id)); // optimistic
+    deleteDeal(id).catch(() => setMyDeals(prev)); // revert on failure
+  };
+  // Total likes across all of the user's deals.
+  const totalLikes = myDeals.reduce((sum, d) => sum + d.likes, 0);
 
   // Device location — shown so the user can confirm what their device reports.
   const [locStatus, setLocStatus] = useState<'loading' | 'denied' | 'error' | 'ok'>('loading');
@@ -193,6 +239,25 @@ export default function Profile() {
           <Text style={styles.rowAction}>Edit</Text>
         </Pressable>
 
+        <Text style={styles.sectionLabel}>Your deals</Text>
+        {dealsStatus === 'success' && myDeals.length > 0 && (
+          <Text style={styles.dealsSummary}>
+            {totalLikes} {totalLikes === 1 ? 'like' : 'likes'} across {myDeals.length}{' '}
+            {myDeals.length === 1 ? 'deal' : 'deals'}
+          </Text>
+        )}
+        {dealsStatus === 'loading' ? (
+          <View style={styles.dealsState}>
+            <Spinner size={28} label="Loading your deals…" />
+          </View>
+        ) : dealsStatus === 'error' ? (
+          <Text style={styles.dealsEmpty}>Couldn't load your deals.</Text>
+        ) : myDeals.length === 0 ? (
+          <Text style={styles.dealsEmpty}>You haven't posted any deals yet.</Text>
+        ) : (
+          myDeals.map((d) => <Coupon key={d.id} item={d} onDelete={() => confirmDelete(d)} />)
+        )}
+
         <PrimaryButton
           label="Log out"
           variant="ghost"
@@ -319,5 +384,18 @@ const styles = StyleSheet.create({
     color: colors.tomato,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  dealsState: { alignItems: 'center', paddingVertical: spacing.xl },
+  dealsSummary: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 14,
+    color: colors.tomato,
+    marginBottom: spacing.md,
+  },
+  dealsEmpty: {
+    fontFamily: fonts.body,
+    fontSize: 14,
+    color: colors.inkSoft,
+    paddingVertical: spacing.lg,
   },
 });

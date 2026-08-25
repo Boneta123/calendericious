@@ -17,13 +17,16 @@ export function TimeWindowBar({
 }) {
   const allDay = startTime === null;
 
-  const toFraction = (t: string) => {
+  // Minutes since midnight. An END of "00:00" means midnight / END of day (24:00,
+  // = 1440), so a 10pm–12am window fills to the right edge instead of collapsing.
+  const toMin = (t: string, isEnd = false) => {
     const [h, m] = t.split(':').map(Number);
-    return (h * 60 + m) / (24 * 60);
+    const v = h * 60 + m;
+    return isEnd && v === 0 ? 1440 : v;
   };
 
-  const left = allDay ? 0 : toFraction(startTime!);
-  const right = allDay ? 1 : toFraction(endTime ?? '23:59');
+  const left = (allDay ? 0 : toMin(startTime!)) / 1440;
+  const right = (allDay ? 1440 : toMin(endTime ?? '23:59', true)) / 1440;
   const widthPct = Math.max(0.04, right - left);
 
   return (

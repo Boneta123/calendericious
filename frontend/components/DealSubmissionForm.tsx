@@ -51,6 +51,14 @@ function mmddLabel(s: string): string {
   const d = mmddToDate(s);
   return d ? `${MONTH_ABBR[d.getMonth()]} ${d.getDate()}` : '';
 }
+
+/** "HH:MM" → minutes since midnight. */
+const timeToMin = (t: string) => {
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+};
+/** End time in minutes — "00:00" means midnight / end of day (1440), not 0. */
+const endToMin = (t: string) => (t === '00:00' ? 1440 : timeToMin(t));
 function thisWeekRange() {
   const now = new Date();
   const end = new Date(now);
@@ -157,6 +165,9 @@ export function DealSubmissionForm({ onAddRestaurant }: { onAddRestaurant: () =>
     if (!title.trim()) next.title = 'A deal name is required.';
     if (!description.trim()) next.description = 'Describe the deal.';
     if (isBirthday && !birthdayWindow) next.birthdayWindow = 'Pick a birthday window.';
+    // A time window needs an end AFTER the start (12 AM end = midnight).
+    if (!isBirthday && startTime && endTime && endToMin(endTime) <= timeToMin(startTime))
+      next.time = 'End time must be after the start time.';
     setErrors(next);
     if (Object.keys(next).length > 0 || !restaurant) return;
 
@@ -326,6 +337,7 @@ export function DealSubmissionForm({ onAddRestaurant }: { onAddRestaurant: () =>
               </Pressable>
             </View>
           </View>
+          {errors.time ? <Text style={styles.errText}>{errors.time}</Text> : null}
 
           {/* Date range */}
           <Text style={styles.fieldLabel}>Date range (optional)</Text>
@@ -405,7 +417,12 @@ export function DealSubmissionForm({ onAddRestaurant }: { onAddRestaurant: () =>
         visible={picker === 'start'}
         title="Start time"
         value={startTime || null}
-        onSelect={(t) => { setStartTime(t); setPicker(null); }}
+        onSelect={(t) => {
+          setStartTime(t);
+          // If the end is now at/before the new start, clear it (must be later).
+          if (endTime && endToMin(endTime) <= timeToMin(t)) setEndTime('');
+          setPicker(null);
+        }}
         onClear={() => { setStartTime(''); setPicker(null); }}
         onClose={() => setPicker(null)}
       />
@@ -413,6 +430,8 @@ export function DealSubmissionForm({ onAddRestaurant }: { onAddRestaurant: () =>
         visible={picker === 'end'}
         title="End time"
         value={endTime || null}
+        isEnd
+        startTime={startTime || null}
         onSelect={(t) => { setEndTime(t); setPicker(null); }}
         onClear={() => { setEndTime(''); setPicker(null); }}
         onClose={() => setPicker(null)}

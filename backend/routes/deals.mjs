@@ -140,6 +140,26 @@ router.post('/deals', auth, async (req, res, next) => {
   }
 });
 
+// DELETE /deals/:id — the CREATOR removes a deal they posted (auth). Ownership
+// is enforced HERE (server-side), not by hiding the button: only the user whose
+// id matches `foundByUserId` may delete. Reactions cascade away via the schema.
+router.delete('/deals/:id', auth, async (req, res, next) => {
+  try {
+    const deal = await prisma.deal.findUnique({
+      where: { id: req.params.id },
+      select: { foundByUserId: true },
+    });
+    if (!deal) return res.status(404).json({ error: 'Deal not found' });
+    if (deal.foundByUserId !== req.user.id)
+      return res.status(403).json({ error: 'You can only delete deals you posted.' });
+    await prisma.deal.delete({ where: { id: req.params.id } });
+    res.json({ ok: true });
+  } catch (err) {
+    if (err && err.code === 'P2025') return res.status(404).json({ error: 'Deal not found' });
+    next(err);
+  }
+});
+
 // POST /deals/:id/like and /deals/:id/dislike — set THIS user's reaction (auth).
 // One reaction per user per deal (unique constraint). Toggle-exclusive:
 //   - no reaction  → add `target`
