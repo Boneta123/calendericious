@@ -9,10 +9,12 @@
  * "cream menu-paper" look — and uses the food-character art from
  * frontend/assets/foodCharacters, served statically at /admin/assets.
  *
- * Protection (FAIL-CLOSED): requires process.env.ADMIN_KEY to be set, and every
- * DATA request must pass ?key=<it>. If ADMIN_KEY is UNSET the dashboard is
- * DISABLED (503) so user PII is never served by accident; wrong key = 403.
- * (We read process.env only — never the .env file.) Images are public.
+ * Protection (FAIL-CLOSED): requires process.env.ADMIN_KEY to be set. The page
+ * shell (GET /) loads WITHOUT a key and shows a login screen; you type the key
+ * once and it's sent on every DATA request as the `x-admin-key` HEADER (never in
+ * the URL). If ADMIN_KEY is UNSET every data request is DISABLED (503) so user
+ * PII is never served by accident; wrong/missing key = 403. The shell carries no
+ * user data server-side. (We read process.env only — never the .env file.)
  */
 import { fileURLToPath } from 'node:url';
 
@@ -59,7 +61,9 @@ function gate(req, res, next) {
     }
     return res.status(503).json({ error: 'Admin dashboard is disabled (ADMIN_KEY not set).' });
   }
-  if (req.query.key === key) return next();
+  // Key comes from the `x-admin-key` header (entered on the login screen) — never
+  // from the URL, so it can't leak into logs/history/referrers.
+  if (req.get('x-admin-key') === key) return next();
   return res.status(403).json({ error: 'Forbidden' });
 }
 
@@ -142,12 +146,9 @@ router.post('/api/restaurants', gate, (req, res, next) => adminAddBrand(prisma.r
 router.post('/api/food-vendors', gate, (req, res, next) => adminAddBrand(prisma.foodVendor, req, res, next));
 
 // HTML dashboard — self-contained (inline CSS + JS). Styled to match the app.
-router.get('/', gate, (req, res) => {
-  const key = process.env.ADMIN_KEY ? encodeURIComponent(String(req.query.key ?? '')) : '';
-  const usersUrl = key ? `/admin/api/users?key=${key}` : '/admin/api/users';
-  const keyQs = key ? `?key=${key}` : ''; // appended to the DELETE/add URLs when gated
-  const addRestaurantUrl = `/admin/api/restaurants${keyQs}`;
-  const addVendorUrl = `/admin/api/food-vendors${keyQs}`;
+// NOT gated: the shell carries no user data; it shows a login screen, and the
+// key is sent as the `x-admin-key` header on the gated /admin/api/* calls.
+router.get('/', (req, res) => {
   res.type('html').send(`<!doctype html>
 <html lang="en">
 <head>
@@ -240,6 +241,19 @@ router.get('/', gate, (req, res) => {
   .add-result.ok { color: var(--basil); }
   .add-result.err { color: var(--tomato); }
 
+  /* Login screen — shown until a valid admin key is entered */
+  .login { position: fixed; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .login-card { background: var(--card); border: 1px solid var(--line); border-radius: 22px; box-shadow: var(--shadow-card); padding: 28px 26px; width: 100%; max-width: 380px; text-align: center; }
+  .login-card img { height: 52px; width: auto; margin-bottom: 12px; }
+  .login-card h1 { font-family: var(--display); font-weight: 800; font-size: 22px; margin: 0 0 4px; }
+  .login-card p { font-family: var(--body); font-weight: 600; color: var(--ink-soft); font-size: 13px; margin: 0 0 18px; }
+  .login-card input { width: 100%; font-family: var(--body); font-size: 15px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: #fff; color: var(--ink); text-align: center; }
+  .login-card input:focus { outline: 2px solid var(--mustard); outline-offset: 1px; }
+  .login-btn { margin-top: 14px; width: 100%; font-family: var(--body); font-weight: 800; font-size: 15px; text-transform: uppercase; letter-spacing: .5px; color: #fff; background: var(--tomato); border: none; border-radius: 999px; padding: 13px; cursor: pointer; }
+  .login-btn:hover { background: #E64420; }
+  .login-btn:disabled { opacity: .55; cursor: default; }
+  .login-error { font-family: var(--body); font-weight: 700; font-size: 13px; color: var(--tomato); margin-top: 12px; min-height: 16px; }
+
   @media (max-width: 560px) {
     .page { padding: 20px 16px 48px; }
     header.masthead img { height: 44px; }
@@ -256,7 +270,18 @@ router.get('/', gate, (req, res) => {
     <img class="m4" src="/admin/assets/burger.png" alt="" />
   </div>
 
-  <div class="page">
+  <div class="login" id="login">
+    <div class="login-card">
+      <img src="/admin/assets/calendericiousLogo.png" alt="Calendericious" />
+      <h1>Admin access</h1>
+      <p>Enter the admin key to continue.</p>
+      <input id="login-key" type="password" placeholder="Admin key" autocomplete="off" autofocus />
+      <button class="login-btn" id="login-btn">Enter</button>
+      <div class="login-error" id="login-error"></div>
+    </div>
+  </div>
+
+  <div class="page" id="dashboard" hidden>
     <header class="masthead">
       <img src="/admin/assets/calendericiousLogo.png" alt="Calendericious" />
       <div>
@@ -322,34 +347,85 @@ router.get('/', gate, (req, res) => {
     const parts = d ? [d + 'd', h + 'h'] : h ? [h + 'h', m + 'm'] : [m + 'm'];
     return '<span class="count">' + parts.join(' ') + '</span>';
   }
-  fetch(${JSON.stringify(usersUrl)})
-    .then(r => r.json())
-    .then(users => {
-      document.getElementById('total').textContent = users.length;
-      const dayAgo = Date.now() - 24*60*60*1000;
-      document.getElementById('active24').textContent =
-        users.filter(u => u.lastLoginAt && new Date(u.lastLoginAt).getTime() >= dayAgo).length;
-      const tbody = document.getElementById('rows');
-      if (!users.length) { tbody.innerHTML = '<tr><td colspan="8" class="empty">No users yet — create an account in the app.</td></tr>'; return; }
-      tbody.innerHTML = users.map(u => (
-        '<tr>' +
-          '<td class="name">' + esc(u.displayName) + '</td>' +
-          '<td class="mono">' + esc(u.email) + '</td>' +
-          '<td class="mono">' + esc(u.birthday || '—') + '</td>' +
-          '<td class="count">' + esc(u.restaurantCount) + '</td>' +
-          '<td class="mono">' + esc(fmt(u.createdAt)) + '</td>' +
-          '<td class="mono">' + (u.lastLoginAt ? esc(fmt(u.lastLoginAt)) : '<span class="never">never</span>') + '</td>' +
-          '<td class="mono">' + timeLeft(u.sessionExpiresAt) + '</td>' +
-          '<td><button class="btn-remove" data-id="' + esc(u.id) + '" data-name="' + esc(u.displayName) + '">Remove</button></td>' +
-        '</tr>'
-      )).join('');
-      tbody.querySelectorAll('.btn-remove').forEach(btn => btn.addEventListener('click', () => removeUser(btn)));
-    })
-    .catch(() => { document.getElementById('rows').innerHTML = '<tr><td colspan="8" class="empty">Failed to load users.</td></tr>'; });
+  // The admin key lives only in memory (+ this tab's sessionStorage), and rides
+  // on every data request as the x-admin-key header — never in the URL.
+  let ADMIN_KEY = null;
+  function authedFetch(url, opts) {
+    opts = opts || {};
+    const headers = Object.assign({}, opts.headers || {}, { 'x-admin-key': ADMIN_KEY });
+    return fetch(url, Object.assign({}, opts, { headers: headers }));
+  }
+
+  function renderUsers(users) {
+    document.getElementById('total').textContent = users.length;
+    const dayAgo = Date.now() - 24*60*60*1000;
+    document.getElementById('active24').textContent =
+      users.filter(u => u.lastLoginAt && new Date(u.lastLoginAt).getTime() >= dayAgo).length;
+    const tbody = document.getElementById('rows');
+    if (!users.length) { tbody.innerHTML = '<tr><td colspan="8" class="empty">No users yet — create an account in the app.</td></tr>'; return; }
+    tbody.innerHTML = users.map(u => (
+      '<tr>' +
+        '<td class="name">' + esc(u.displayName) + '</td>' +
+        '<td class="mono">' + esc(u.email) + '</td>' +
+        '<td class="mono">' + esc(u.birthday || '—') + '</td>' +
+        '<td class="count">' + esc(u.restaurantCount) + '</td>' +
+        '<td class="mono">' + esc(fmt(u.createdAt)) + '</td>' +
+        '<td class="mono">' + (u.lastLoginAt ? esc(fmt(u.lastLoginAt)) : '<span class="never">never</span>') + '</td>' +
+        '<td class="mono">' + timeLeft(u.sessionExpiresAt) + '</td>' +
+        '<td><button class="btn-remove" data-id="' + esc(u.id) + '" data-name="' + esc(u.displayName) + '">Remove</button></td>' +
+      '</tr>'
+    )).join('');
+    tbody.querySelectorAll('.btn-remove').forEach(btn => btn.addEventListener('click', () => removeUser(btn)));
+  }
+
+  function loadUsers() {
+    authedFetch('/admin/api/users')
+      .then(r => r.json())
+      .then(renderUsers)
+      .catch(() => { document.getElementById('rows').innerHTML = '<tr><td colspan="8" class="empty">Failed to load users.</td></tr>'; });
+  }
+
+  // --- Login: exchange the key for a first data load, then reveal the dashboard ---
+  const loginEl = document.getElementById('login');
+  const keyInput = document.getElementById('login-key');
+  const loginBtn = document.getElementById('login-btn');
+  const loginError = document.getElementById('login-error');
+  function attemptLogin() {
+    const key = keyInput.value.trim();
+    loginError.textContent = '';
+    if (!key) { loginError.textContent = 'Enter the admin key.'; return; }
+    loginBtn.disabled = true; loginBtn.textContent = 'Checking…';
+    fetch('/admin/api/users', { headers: { 'x-admin-key': key } })
+      .then(r => {
+        if (r.status === 503) throw new Error('Admin is disabled (ADMIN_KEY not set).');
+        if (r.status === 401 || r.status === 403) throw new Error('Wrong key.');
+        if (!r.ok) throw new Error('Could not load. Try again.');
+        return r.json();
+      })
+      .then(users => {
+        ADMIN_KEY = key;
+        try { sessionStorage.setItem('adminKey', key); } catch (e) {}
+        loginEl.style.display = 'none';
+        document.getElementById('dashboard').hidden = false;
+        renderUsers(users);
+      })
+      .catch(e => {
+        ADMIN_KEY = null;
+        try { sessionStorage.removeItem('adminKey'); } catch (e2) {}
+        loginError.textContent = e.message || 'Login failed.';
+      })
+      .finally(() => { loginBtn.disabled = false; loginBtn.textContent = 'Enter'; });
+  }
+  loginBtn.addEventListener('click', attemptLogin);
+  keyInput.addEventListener('keydown', e => { if (e.key === 'Enter') attemptLogin(); });
+
+  // Restore from this tab's session so a reload doesn't re-prompt (still not the URL).
+  try {
+    const saved = sessionStorage.getItem('adminKey');
+    if (saved) { keyInput.value = saved; attemptLogin(); }
+  } catch (e) {}
 
   // --- Add a chain (name + website only) ---
-  const ADD_RESTAURANT_URL = ${JSON.stringify(addRestaurantUrl)};
-  const ADD_VENDOR_URL = ${JSON.stringify(addVendorUrl)};
   const addBtn = document.getElementById('add-run');
   const addResult = document.getElementById('add-result');
   addBtn.addEventListener('click', () => {
@@ -363,7 +439,7 @@ router.get('/', gate, (req, res) => {
       return;
     }
     addBtn.disabled = true; addBtn.textContent = 'Adding…';
-    fetch(type === 'foodVendor' ? ADD_VENDOR_URL : ADD_RESTAURANT_URL, {
+    authedFetch(type === 'foodVendor' ? '/admin/api/food-vendors' : '/admin/api/restaurants', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, url }),
@@ -379,14 +455,13 @@ router.get('/', gate, (req, res) => {
       .finally(() => { addBtn.disabled = false; addBtn.textContent = 'Add'; });
   });
 
-  const DELETE_KEY_QS = ${JSON.stringify(keyQs)};
   function removeUser(btn) {
     const id = btn.getAttribute('data-id');
     const name = btn.getAttribute('data-name');
     if (!confirm('Delete the account for ' + name + '? This permanently removes the user and cannot be undone.')) return;
     btn.disabled = true; btn.textContent = 'Removing…';
-    fetch('/admin/api/users/' + encodeURIComponent(id) + DELETE_KEY_QS, { method: 'DELETE' })
-      .then(r => { if (!r.ok) throw new Error(); location.reload(); })
+    authedFetch('/admin/api/users/' + encodeURIComponent(id), { method: 'DELETE' })
+      .then(r => { if (!r.ok) throw new Error(); loadUsers(); })
       .catch(() => { btn.disabled = false; btn.textContent = 'Remove'; alert('Failed to remove user.'); });
   }
 </script>
