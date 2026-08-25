@@ -49,8 +49,10 @@ model User {
   resetCodeExpiresAt DateTime? // when the reset code expires (~15 min)
 
   restaurants UserRestaurant[]
+  foodVendors UserFoodVendor[]
   sessions    Session[]
   foundDeals  Deal[]   @relation("FoundDeals") // deals this user submitted/created
+  reactions   DealReaction[] // this user's like/dislike per deal
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -90,6 +92,7 @@ model FoodVendor {
   lng     Float?
 
   deals Deal[]
+  users UserFoodVendor[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -122,6 +125,20 @@ model UserRestaurant {
   @@index([restaurantId])
 }
 
+/// A user's selected food vendors — explicit many-to-many join (mirrors UserRestaurant).
+model UserFoodVendor {
+  userId       String
+  foodVendorId String
+  selectedAt   DateTime @default(now())
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  foodVendor FoodVendor @relation(fields: [foodVendorId], references: [id], onDelete: Cascade)
+
+  @@id([userId, foodVendorId])
+  @@index([userId])
+  @@index([foodVendorId])
+}
+
 /// A deal. Schemed off frontend/data/types.ts `Deal`, extended with the
 /// scraper's fields so scraped deals persist without reshaping.
 model Deal {
@@ -152,6 +169,7 @@ model Deal {
   restaurant  Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   foodVendor  FoodVendor? @relation(fields: [foodVendorId], references: [id], onDelete: Cascade)
   foundByUser User?       @relation("FoundDeals", fields: [foundByUserId], references: [id], onDelete: SetNull)
+  reactions   DealReaction[] // per-user like/dislike rows (source of truth; likes/dislikes are cached totals)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -161,4 +179,26 @@ model Deal {
   @@index([foodVendorId])
   @@index([foundByUserId])
   @@index([category])
+}
+
+enum ReactionType {
+  LIKE
+  DISLIKE
+}
+
+/// One reaction (LIKE or DISLIKE) per user per deal. The @@unique([userId, dealId])
+/// makes a second like/dislike impossible; switching sides updates the row in
+/// place (and Deal.likes/dislikes are adjusted transactionally to stay in sync).
+model DealReaction {
+  id        String       @id @default(cuid())
+  userId    String
+  dealId    String
+  type      ReactionType
+  createdAt DateTime     @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deal Deal @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dealId])
+  @@index([dealId])
 }

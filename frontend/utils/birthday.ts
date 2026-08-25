@@ -4,13 +4,13 @@
  * birthday only ever need the month and day.
  */
 
-const MONTHS = [
+export const MONTHS = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ];
 
 // Days per month (Feb allows 29 so leap-year birthdays are valid).
-const DAYS_IN_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+export const DAYS_IN_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
 /** Strip to digits and auto-insert a slash → "MM/DD" (max 5 chars). Sanitizer. */
 export function sanitizeBirthdayInput(raw: string): string {

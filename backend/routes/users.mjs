@@ -29,7 +29,7 @@ const PASSWORD_OK = (pw) => typeof pw === 'string' && pw.length > 7 && /[^A-Za-z
 const PASSWORD_MSG = 'Password must be more than 7 characters and include a special character.';
 
 /** Shape the client is allowed to see — never the passwordHash. */
-function safeUser(user, restaurantIds) {
+function safeUser(user, restaurantIds, foodVendorIds = []) {
   return {
     id: user.id,
     displayName: user.displayName,
@@ -38,6 +38,7 @@ function safeUser(user, restaurantIds) {
     profilePhoto: user.profilePhoto ?? null,
     nearMeRadius: user.nearMeRadius ?? 25,
     restaurantIds,
+    foodVendorIds,
   };
 }
 
@@ -90,7 +91,10 @@ router.post('/auth/login', loginLimiter, async (req, res, next) => {
 
     const user = await prisma.user.findUnique({
       where: { email: email.trim().toLowerCase() },
-      include: { restaurants: { select: { restaurantId: true } } },
+      include: {
+        restaurants: { select: { restaurantId: true } },
+        foodVendors: { select: { foodVendorId: true } },
+      },
     });
     if (!user || !verifyPassword(password, user.passwordHash)) {
       return res.status(401).json({ error: 'Invalid email or password' });
@@ -98,8 +102,9 @@ router.post('/auth/login', loginLimiter, async (req, res, next) => {
     // Record the login for the admin dashboard (fire-and-forget is fine).
     await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
     const restaurantIds = user.restaurants.map((r) => r.restaurantId);
+    const foodVendorIds = user.foodVendors.map((v) => v.foodVendorId);
     const token = await createSession(user.id);
-    res.json({ ...safeUser(user, restaurantIds), token });
+    res.json({ ...safeUser(user, restaurantIds, foodVendorIds), token });
   } catch (err) {
     next(err);
   }
@@ -110,10 +115,17 @@ router.get('/auth/me', auth, async (req, res, next) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
-      include: { restaurants: { select: { restaurantId: true } } },
+      include: {
+        restaurants: { select: { restaurantId: true } },
+        foodVendors: { select: { foodVendorId: true } },
+      },
     });
     if (!user) return res.status(401).json({ error: 'Not authenticated.' });
-    res.json(safeUser(user, user.restaurants.map((r) => r.restaurantId)));
+    res.json(safeUser(
+      user,
+      user.restaurants.map((r) => r.restaurantId),
+      user.foodVendors.map((v) => v.foodVendorId),
+    ));
   } catch (err) {
     next(err);
   }

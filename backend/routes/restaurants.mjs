@@ -122,4 +122,31 @@ router.put('/users/:id/restaurants', auth, requireSelf, async (req, res, next) =
   }
 });
 
+// Replace the user's selected food vendors. body: { foodVendorIds: string[] }
+router.put('/users/:id/food-vendors', auth, requireSelf, async (req, res, next) => {
+  try {
+    const userId = req.params.id;
+    const requested = Array.isArray(req.body?.foodVendorIds) ? req.body.foodVendorIds : [];
+
+    // Keep only ids that are real food vendors.
+    const valid = await prisma.foodVendor.findMany({
+      where: { id: { in: requested } },
+      select: { id: true },
+    });
+    const ids = valid.map((v) => v.id);
+
+    // Replace this user's selection atomically.
+    await prisma.$transaction([
+      prisma.userFoodVendor.deleteMany({ where: { userId } }),
+      ...(ids.length
+        ? [prisma.userFoodVendor.createMany({ data: ids.map((foodVendorId) => ({ userId, foodVendorId })) })]
+        : []),
+    ]);
+
+    res.json({ foodVendorIds: ids });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

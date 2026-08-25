@@ -6,8 +6,16 @@ import { Router } from 'express';
 
 import { prisma } from '../db.mjs';
 import { auth } from '../middleware/auth.mjs';
+import { userIdForToken } from '../lib/session.mjs';
 
 const router = Router();
+
+/** Resolve the caller's user id from a bearer token if present (no 401 on miss). */
+async function optionalViewerId(req) {
+  const h = req.headers.authorization || '';
+  const token = h.startsWith('Bearer ') ? h.slice(7).trim() : null;
+  return token ? await userIdForToken(token) : null;
+}
 
 const CATEGORIES = new Set(['DAY', 'TIME', 'LIMITED_TIME', 'BIRTHDAY']);
 const WINDOWS = new Set(['DAY', 'WEEK', 'MONTH']);
@@ -30,6 +38,8 @@ router.get('/deals', async (req, res, next) => {
   try {
     const restaurantId = req.query.restaurantId ? String(req.query.restaurantId) : null;
     const userId = req.query.userId ? String(req.query.userId) : null;
+    // Optional auth: if a token is present, include THIS viewer's reaction per deal.
+    const viewerId = await optionalViewerId(req);
 
     let where;
     if (userId) {
@@ -53,12 +63,19 @@ router.get('/deals', async (req, res, next) => {
         // "Near me" distance filter (client-side haversine to the device).
         restaurant: { select: { id: true, name: true, logoUrl: true, address: true, lat: true, lng: true } },
         foodVendor: { select: { id: true, name: true, logoUrl: true, address: true, lat: true, lng: true } },
+        // Only THIS viewer's reaction (if signed in) → drives the selected state.
+        ...(viewerId ? { reactions: { where: { userId: viewerId }, select: { type: true } } } : {}),
       },
       // A food-vendor deal has no restaurant, so ordering by the restaurant
       // relation breaks — order by recency instead.
       orderBy: { createdAt: 'desc' },
     });
-    res.json(deals);
+    // Flatten each deal's single reaction into `myReaction` ('LIKE'|'DISLIKE'|null).
+    const out = deals.map((d) => {
+      const { reactions, ...rest } = d;
+      return { ...rest, myReaction: reactions && reactions.length ? reactions[0].type : null };
+    });
+    res.json(out);
   } catch (err) {
     next(err);
   }
@@ -123,35 +140,63 @@ router.post('/deals', auth, async (req, res, next) => {
   }
 });
 
-// POST /deals/:id/like and /deals/:id/dislike — increment the counter and
-// return the new totals. Simple button-driven counters, no per-user dedupe.
-// TODO: per-user like tracking (a join table) is a future improvement.
-router.post('/deals/:id/like', async (req, res, next) => {
+// POST /deals/:id/like and /deals/:id/dislike — set THIS user's reaction (auth).
+// One reaction per user per deal (unique constraint). Toggle-exclusive:
+//   - no reaction  → add `target`
+//   - same as tap  → remove it (un-react)
+//   - opposite     → switch sides (so a dislike removes a like, and vice-versa)
+// Deal.likes/dislikes are kept in sync inside the same transaction. Returns the
+// fresh totals + the user's current reaction.
+async function react(req, res, next, target) {
   try {
-    const deal = await prisma.deal.update({
-      where: { id: req.params.id },
-      data: { likes: { increment: 1 } },
-      select: { likes: true, dislikes: true },
-    });
-    res.json(deal);
-  } catch (err) {
-    if (err && err.code === 'P2025') return res.status(404).json({ error: 'Deal not found' });
-    next(err);
-  }
-});
+    const dealId = req.params.id;
+    const userId = req.user.id;
+    const result = await prisma.$transaction(async (tx) => {
+      const deal = await tx.deal.findUnique({ where: { id: dealId }, select: { id: true } });
+      if (!deal) return null;
 
-router.post('/deals/:id/dislike', async (req, res, next) => {
-  try {
-    const deal = await prisma.deal.update({
-      where: { id: req.params.id },
-      data: { dislikes: { increment: 1 } },
-      select: { likes: true, dislikes: true },
+      const existing = await tx.dealReaction.findUnique({
+        where: { userId_dealId: { userId, dealId } },
+      });
+      const inc = (field) => ({ [field]: { increment: 1 } });
+      const dec = (field) => ({ [field]: { decrement: 1 } });
+      const counterField = (t) => (t === 'LIKE' ? 'likes' : 'dislikes');
+
+      let myReaction;
+      if (!existing) {
+        await tx.dealReaction.create({ data: { userId, dealId, type: target } });
+        await tx.deal.update({ where: { id: dealId }, data: inc(counterField(target)) });
+        myReaction = target;
+      } else if (existing.type === target) {
+        await tx.dealReaction.delete({ where: { userId_dealId: { userId, dealId } } });
+        await tx.deal.update({ where: { id: dealId }, data: dec(counterField(target)) });
+        myReaction = null;
+      } else {
+        await tx.dealReaction.update({
+          where: { userId_dealId: { userId, dealId } },
+          data: { type: target },
+        });
+        await tx.deal.update({
+          where: { id: dealId },
+          data: { ...inc(counterField(target)), ...dec(counterField(existing.type)) },
+        });
+        myReaction = target;
+      }
+
+      const fresh = await tx.deal.findUnique({
+        where: { id: dealId },
+        select: { likes: true, dislikes: true },
+      });
+      return { likes: Math.max(0, fresh.likes), dislikes: Math.max(0, fresh.dislikes), myReaction };
     });
-    res.json(deal);
+    if (!result) return res.status(404).json({ error: 'Deal not found' });
+    res.json(result);
   } catch (err) {
-    if (err && err.code === 'P2025') return res.status(404).json({ error: 'Deal not found' });
     next(err);
   }
-});
+}
+
+router.post('/deals/:id/like', auth, (req, res, next) => react(req, res, next, 'LIKE'));
+router.post('/deals/:id/dislike', auth, (req, res, next) => react(req, res, next, 'DISLIKE'));
 
 export default router;

@@ -104,6 +104,8 @@ export interface ApiDeal {
   foundByUserId: string | null; // the creator's user id (tap → their public profile); null for scraped
   likes: number;
   dislikes: number;
+  /** The signed-in user's reaction to this deal (null if none / signed out). */
+  myReaction: 'LIKE' | 'DISLIKE' | null;
   sourceUrl: string | null;
   createdAt: string;
   updatedAt: string;
@@ -120,7 +122,11 @@ export function dealVendor(deal: ApiDeal): ApiDealRestaurant {
  *  deals are returned. Throws on a non-2xx response. */
 export async function fetchDeals(userId?: string): Promise<ApiDeal[]> {
   const qs = userId ? `?userId=${encodeURIComponent(userId)}` : '';
-  const res = await fetch(`${API_BASE}/api/deals${qs}`);
+  // Send the session token (optional server-side) so each deal carries the
+  // viewer's `myReaction` for the selected like/dislike state.
+  const headers: Record<string, string> = {};
+  if (authToken) headers.Authorization = `Bearer ${authToken}`;
+  const res = await fetch(`${API_BASE}/api/deals${qs}`, { headers });
   if (!res.ok) {
     throw new Error(`fetchDeals failed: ${res.status} ${res.statusText}`);
   }
@@ -213,13 +219,19 @@ export function createDeal(input: {
   return sendJson<ApiDeal>('/api/deals', 'POST', input);
 }
 
-/** Like a deal — increments the counter; returns the new totals. */
-export function likeDeal(id: string): Promise<{ likes: number; dislikes: number }> {
-  return sendJson<{ likes: number; dislikes: number }>(`/api/deals/${id}/like`, 'POST', {});
+/** The result of a like/dislike tap: fresh totals + the user's current reaction. */
+export interface ReactionResult {
+  likes: number;
+  dislikes: number;
+  myReaction: 'LIKE' | 'DISLIKE' | null;
 }
-/** Dislike a deal — increments the counter; returns the new totals. */
-export function dislikeDeal(id: string): Promise<{ likes: number; dislikes: number }> {
-  return sendJson<{ likes: number; dislikes: number }>(`/api/deals/${id}/dislike`, 'POST', {});
+/** Toggle a LIKE on a deal (removes an existing dislike; a 2nd tap un-likes). */
+export function likeDeal(id: string): Promise<ReactionResult> {
+  return sendJson<ReactionResult>(`/api/deals/${id}/like`, 'POST', {});
+}
+/** Toggle a DISLIKE on a deal (removes an existing like; a 2nd tap un-dislikes). */
+export function dislikeDeal(id: string): Promise<ReactionResult> {
+  return sendJson<ReactionResult>(`/api/deals/${id}/dislike`, 'POST', {});
 }
 
 // --- Auth ------------------------------------------------------------------
@@ -233,6 +245,7 @@ export interface AuthUser {
   profilePhoto: string | null;
   nearMeRadius: number; // saved "Near me" radius in miles (10/25/50)
   restaurantIds: string[];
+  foodVendorIds: string[];
 }
 
 /** POST/PUT JSON helper — throws an Error carrying the server's `error` on non-2xx. */
@@ -344,6 +357,18 @@ export function saveRestaurants(
     `/api/users/${userId}/restaurants`,
     'PUT',
     { restaurantIds },
+  );
+}
+
+/** Persist the user's chosen food vendors; returns the saved ids. */
+export function saveFoodVendors(
+  userId: string,
+  foodVendorIds: string[],
+): Promise<{ foodVendorIds: string[] }> {
+  return sendJson<{ foodVendorIds: string[] }>(
+    `/api/users/${userId}/food-vendors`,
+    'PUT',
+    { foodVendorIds },
   );
 }
 

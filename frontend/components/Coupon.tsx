@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
-import React, { useState } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { Animated, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { DISLIKE_ICON, LIKE_ICON } from '../assets/foodCharacters';
 import { ApiDeal, dealVendor, dislikeDeal, likeDeal } from '../data/api';
 import { colors, fonts, radii, shadow, spacing } from '../theme/theme';
 import { Badge } from './Badge';
@@ -17,38 +18,58 @@ export function Coupon({ item }: { item: ApiDeal }) {
   const vendor = dealVendor(item);
   const allDay = item.startTime === null;
 
-  // Like/dislike — optimistic; one vote per mounted card.
+  // Per-user reaction (one like OR dislike, persisted). Optimistic + server-synced.
   const [likes, setLikes] = useState(item.likes);
   const [dislikes, setDislikes] = useState(item.dislikes);
-  const [voted, setVoted] = useState<null | 'like' | 'dislike'>(null);
+  const [reaction, setReaction] = useState<'LIKE' | 'DISLIKE' | null>(item.myReaction ?? null);
+  const [busy, setBusy] = useState(false);
+  const likeScale = useRef(new Animated.Value(1)).current;
+  const dislikeScale = useRef(new Animated.Value(1)).current;
 
-  const like = () => {
-    if (voted) return;
-    setVoted('like');
-    setLikes((n) => n + 1);
-    likeDeal(item.id)
-      .then((r) => {
-        setLikes(r.likes);
-        setDislikes(r.dislikes);
-      })
-      .catch(() => {
-        setVoted(null);
-        setLikes((n) => n - 1);
-      });
+  // A slight bounce on the tapped icon: pop up, then spring back to rest.
+  const bounce = (v: Animated.Value) => {
+    Animated.sequence([
+      Animated.timing(v, { toValue: 1.3, duration: 120, useNativeDriver: true }),
+      Animated.spring(v, { toValue: 1, friction: 4, tension: 140, useNativeDriver: true }),
+    ]).start();
   };
-  const dislike = () => {
-    if (voted) return;
-    setVoted('dislike');
-    setDislikes((n) => n + 1);
-    dislikeDeal(item.id)
+
+  const react = (target: 'LIKE' | 'DISLIKE') => {
+    if (busy) return;
+    const prev = { likes, dislikes, reaction };
+    // Optimistic toggle-exclusive (mirrors the backend).
+    let nLikes = likes;
+    let nDislikes = dislikes;
+    let nReaction: 'LIKE' | 'DISLIKE' | null;
+    if (reaction === target) {
+      target === 'LIKE' ? (nLikes -= 1) : (nDislikes -= 1); // un-react
+      nReaction = null;
+    } else if (reaction) {
+      // switch sides — remove the opposite, add this one
+      target === 'LIKE' ? ((nLikes += 1), (nDislikes -= 1)) : ((nDislikes += 1), (nLikes -= 1));
+      nReaction = target;
+    } else {
+      target === 'LIKE' ? (nLikes += 1) : (nDislikes += 1);
+      nReaction = target;
+    }
+    setLikes(Math.max(0, nLikes));
+    setDislikes(Math.max(0, nDislikes));
+    setReaction(nReaction);
+    bounce(target === 'LIKE' ? likeScale : dislikeScale);
+
+    setBusy(true);
+    (target === 'LIKE' ? likeDeal : dislikeDeal)(item.id)
       .then((r) => {
         setLikes(r.likes);
         setDislikes(r.dislikes);
+        setReaction(r.myReaction);
       })
       .catch(() => {
-        setVoted(null);
-        setDislikes((n) => n - 1);
-      });
+        setLikes(prev.likes);
+        setDislikes(prev.dislikes);
+        setReaction(prev.reaction);
+      })
+      .finally(() => setBusy(false));
   };
 
   return (
@@ -75,27 +96,35 @@ export function Coupon({ item }: { item: ApiDeal }) {
           {item.requiresRewards && <Badge label="Rewards required" tone="grape" />}
         </View>
 
-        {/* Like / dislike */}
+        {/* Like / dislike — PNG icons; selected = full opacity + bold count */}
         <View style={styles.voteRow}>
           <Pressable
-            onPress={like}
-            disabled={!!voted}
-            style={[styles.voteBtn, voted === 'like' && styles.voteBtnActive]}
+            onPress={() => react('LIKE')}
+            style={styles.voteBtn}
             accessibilityRole="button"
+            accessibilityState={{ selected: reaction === 'LIKE' }}
             accessibilityLabel={`Like this deal (${likes})`}
           >
-            <Text style={[styles.voteText, voted === 'like' && styles.voteTextActive]}>Like · {likes}</Text>
+            <Animated.Image
+              source={LIKE_ICON}
+              resizeMode="contain"
+              style={[styles.voteIcon, { transform: [{ scale: likeScale }], opacity: reaction === 'LIKE' ? 1 : 0.4 }]}
+            />
+            <Text style={[styles.voteCount, reaction === 'LIKE' && styles.voteCountActive]}>{likes}</Text>
           </Pressable>
           <Pressable
-            onPress={dislike}
-            disabled={!!voted}
-            style={[styles.voteBtn, voted === 'dislike' && styles.voteBtnActive]}
+            onPress={() => react('DISLIKE')}
+            style={styles.voteBtn}
             accessibilityRole="button"
+            accessibilityState={{ selected: reaction === 'DISLIKE' }}
             accessibilityLabel={`Dislike this deal (${dislikes})`}
           >
-            <Text style={[styles.voteText, voted === 'dislike' && styles.voteTextActive]}>
-              Dislike · {dislikes}
-            </Text>
+            <Animated.Image
+              source={DISLIKE_ICON}
+              resizeMode="contain"
+              style={[styles.voteIcon, { transform: [{ scale: dislikeScale }], opacity: reaction === 'DISLIKE' ? 1 : 0.4 }]}
+            />
+            <Text style={[styles.voteCount, reaction === 'DISLIKE' && styles.voteCountActive]}>{dislikes}</Text>
           </Pressable>
         </View>
 
@@ -176,17 +205,17 @@ const styles = StyleSheet.create({
     lineHeight: 21,
   },
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.lg },
-  voteRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
+  voteRow: { flexDirection: 'row', gap: spacing.lg, marginTop: spacing.lg },
   voteBtn: {
-    borderRadius: radii.pill,
-    borderWidth: 2,
-    borderColor: colors.line,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    minHeight: 44,
+    paddingRight: spacing.sm,
   },
-  voteBtnActive: { backgroundColor: colors.tomato, borderColor: colors.tomato },
-  voteText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.inkSoft },
-  voteTextActive: { color: '#FFFFFF' },
+  voteIcon: { width: 28, height: 28 },
+  voteCount: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.inkSoft },
+  voteCountActive: { color: colors.tomato },
   foundByLink: { marginTop: spacing.md, alignSelf: 'flex-start' },
   foundByText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.tomato },
   sourceLink: { marginTop: spacing.md, alignSelf: 'flex-start' },

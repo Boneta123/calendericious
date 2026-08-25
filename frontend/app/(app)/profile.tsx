@@ -12,7 +12,7 @@ import { BirthdayModal } from '../../components/BirthdayModal';
 import { useAuth } from '../../context/AuthContext';
 import { useRestaurantSelection } from '../../context/RestaurantSelectionContext';
 import { useFoodVendors } from '../../context/FoodVendorContext';
-import { saveProfilePhoto, saveRestaurants } from '../../data/api';
+import { saveFoodVendors, saveProfilePhoto, saveRestaurants } from '../../data/api';
 import { colors, fonts, radii, shadow, spacing } from '../../theme/theme';
 import { formatBirthday } from '../../utils/birthday';
 
@@ -24,7 +24,7 @@ import { formatBirthday } from '../../utils/birthday';
 export default function Profile() {
   const { user, updateBirthday, updatePhoto, logOut } = useAuth();
   const { count: restaurantCount, selectedIds } = useRestaurantSelection();
-  const { count: vendorCount } = useFoodVendors();
+  const { count: vendorCount, foodVendorSelectedIds } = useFoodVendors();
   const [birthdayModal, setBirthdayModal] = useState(false);
   const [restaurantModal, setRestaurantModal] = useState(false);
   const [vendorModal, setVendorModal] = useState(false);
@@ -217,7 +217,14 @@ export default function Profile() {
         }}
       />
 
-      <FoodVendorPickerModal visible={vendorModal} onClose={() => setVendorModal(false)} />
+      <FoodVendorPickerModal
+        visible={vendorModal}
+        onClose={() => {
+          setVendorModal(false);
+          // Persist the updated food-vendor selection (best-effort).
+          if (user) saveFoodVendors(user.id, [...foodVendorSelectedIds]).catch(() => {});
+        }}
+      />
     </SafeAreaView>
   );
 }

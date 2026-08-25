@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { BirthdayPicker } from '../../components/BirthdayPicker';
 import { BrandLogo } from '../../components/BrandLogo';
 import { FadeInView } from '../../components/FadeInView';
 import { PrimaryButton } from '../../components/PrimaryButton';
@@ -18,7 +19,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useRestaurantSelection } from '../../context/RestaurantSelectionContext';
 import { saveRestaurants } from '../../data/api';
 import { colors, fonts, spacing } from '../../theme/theme';
-import { isValidBirthday, sanitizeBirthdayInput, toStoredBirthday } from '../../utils/birthday';
+import { isValidBirthday } from '../../utils/birthday';
 
 export default function SignUp() {
   const { signUp, user } = useAuth();
@@ -40,7 +41,7 @@ export default function SignUp() {
     if (password.length <= 7 || !/[^A-Za-z0-9]/.test(password))
       next.password = 'Must be more than 7 characters and include a special character.';
     if (confirmPassword !== password) next.confirmPassword = 'Passwords do not match.';
-    if (!isValidBirthday(birthday)) next.birthday = 'Enter your birthday as MM/DD.';
+    if (!isValidBirthday(birthday)) next.birthday = 'Pick your birthday.';
     setErrors(next);
     if (Object.keys(next).length > 0) return;
 
@@ -51,7 +52,7 @@ export default function SignUp() {
         email,
         password,
         displayName: displayName.trim(),
-        birthday: toStoredBirthday(birthday),
+        birthday, // already stored "MM-DD" from the picker
       });
       setShowOnboarding(true);
     } catch (err) {
@@ -134,17 +135,9 @@ export default function SignUp() {
             passwordToggle
             error={errors.confirmPassword}
           />
-          <TextField
-            label="Birthday (MM/DD)"
-            value={birthday}
-            onChangeText={(t) => setBirthday(sanitizeBirthdayInput(t))}
-            placeholder="07/04"
-            keyboardType="number-pad"
-            maxLength={5}
-            error={errors.birthday}
-            helper="Used to unlock birthday deals — month and day only."
-            mono
-          />
+          <Text style={styles.birthdayLabel}>Birthday</Text>
+          <BirthdayPicker value={birthday} onChange={setBirthday} error={errors.birthday} />
+          <Text style={styles.birthdayHelper}>Used to unlock birthday deals — month and day only.</Text>
 
           {errors.form ? <Text style={styles.formError}>{errors.form}</Text> : null}
 
@@ -199,6 +192,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.tomato,
     textAlign: 'center',
+    marginTop: spacing.sm,
+  },
+  birthdayLabel: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 14,
+    color: colors.ink,
+    marginTop: spacing.md,
+  },
+  birthdayHelper: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: colors.inkSoft,
     marginTop: spacing.sm,
   },
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: spacing.xl },

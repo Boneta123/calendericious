@@ -17,13 +17,11 @@ import { FadeInView } from '../../components/FadeInView';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { TextField } from '../../components/TextField';
 import { useAuth } from '../../context/AuthContext';
-import { useRestaurantSelection } from '../../context/RestaurantSelectionContext';
 import { ForgotPasswordModal } from '../../components/ForgotPasswordModal';
 import { colors, fonts, spacing } from '../../theme/theme';
 
 export default function LogIn() {
   const { logIn } = useAuth();
-  const { setAll } = useRestaurantSelection();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -39,8 +37,8 @@ export default function LogIn() {
 
     setSubmitting(true);
     try {
-      const user = await logIn({ email, password });
-      setAll(user.restaurantIds); // hydrate the saved selection
+      await logIn({ email, password });
+      // Selections hydrate from the user in their providers (login + restore).
       router.replace('/(app)');
     } catch (err) {
       setErrors({ form: err instanceof Error ? err.message : 'Could not log in.' });

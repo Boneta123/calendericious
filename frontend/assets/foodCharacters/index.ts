@@ -18,6 +18,10 @@ export const NO_DEALS: ImageSourcePropType = require('./noDeals.png');
 
 /** Crowdsourcing submission icons — pick a deal vs a restaurant to submit. */
 export const DEAL_SUBMISSION_ICON: ImageSourcePropType = require('./dealSubmissionIcon.png');
+
+/** Like / dislike icons for the deal coupon's reaction buttons. */
+export const LIKE_ICON: ImageSourcePropType = require('./like.png');
+export const DISLIKE_ICON: ImageSourcePropType = require('./dislike.png');
 export const RESTAURANT_SUBMISSION_ICON: ImageSourcePropType = require('./restarauntSubmissionIcon.png');
 
 /** Individual mascots, reused across the scattered background. */

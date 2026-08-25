@@ -3,9 +3,12 @@ import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-nati
 import { createDeal } from '../data/api';
 import { fetchRestaurants, Restaurant } from '../data/restaurants';
 import { colors, fonts, radii, shadow, spacing } from '../theme/theme';
+import { formatClock } from '../utils/date';
+import { CalendarPickerModal } from './CalendarPickerModal';
 import { PrimaryButton } from './PrimaryButton';
 import { RestaurantLogo } from './RestaurantLogo';
 import { TextField } from './TextField';
+import { TimePickerModal } from './TimePickerModal';
 
 type Category = 'DAY' | 'TIME' | 'LIMITED_TIME' | 'BIRTHDAY';
 type BirthdayWindow = 'DAY' | 'WEEK' | 'MONTH';
@@ -35,6 +38,19 @@ const WINDOWS: BirthdayWindow[] = ['DAY', 'WEEK', 'MONTH'];
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const mmdd = (d: Date) => `${pad(d.getMonth() + 1)}/${pad(d.getDate())}`;
+const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** "MM/DD" → a Date in the current year (null if empty/invalid). */
+function mmddToDate(s: string): Date | null {
+  const m = s.trim().match(/^(\d{1,2})\/(\d{1,2})$/);
+  if (!m) return null;
+  const d = new Date(new Date().getFullYear(), Number(m[1]) - 1, Number(m[2]));
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+/** "MM/DD" → "Sep 16" for display. */
+function mmddLabel(s: string): string {
+  const d = mmddToDate(s);
+  return d ? `${MONTH_ABBR[d.getMonth()]} ${d.getDate()}` : '';
+}
 function thisWeekRange() {
   const now = new Date();
   const end = new Date(now);
@@ -72,6 +88,8 @@ export function DealSubmissionForm({ onAddRestaurant }: { onAddRestaurant: () =>
   const [endTime, setEndTime] = useState('');
   const [validFrom, setValidFrom] = useState('');
   const [validThrough, setValidThrough] = useState('');
+  // Which time/date popup is open (null = none). Times & dates are pick-only.
+  const [picker, setPicker] = useState<null | 'start' | 'end' | 'from' | 'through'>(null);
   // Birthday deals are windowed around the user's birthday, so they replace the
   // day/time/date section rather than combine with it.
   const [isBirthday, setIsBirthday] = useState(false);
@@ -121,6 +139,7 @@ export function DealSubmissionForm({ onAddRestaurant }: { onAddRestaurant: () =>
     setEndTime('');
     setValidFrom('');
     setValidThrough('');
+    setPicker(null);
     setIsBirthday(false);
     setBirthdayWindow(null);
     setRequiresRewards(false);
@@ -277,14 +296,34 @@ export function DealSubmissionForm({ onAddRestaurant }: { onAddRestaurant: () =>
             ))}
           </View>
 
-          {/* Time window */}
+          {/* Time window — pick from hour/half-hour slots (no typing) */}
           <Text style={styles.fieldLabel}>Time window (optional)</Text>
           <View style={styles.pairRow}>
             <View style={styles.pairItem}>
-              <TextField label="Start (HH:MM)" value={startTime} onChangeText={setStartTime} placeholder="15:00" keyboardType="numbers-and-punctuation" mono />
+              <Text style={styles.miniLabel}>Start</Text>
+              <Pressable
+                onPress={() => setPicker('start')}
+                style={styles.pickerField}
+                accessibilityRole="button"
+                accessibilityLabel={startTime ? `Start time ${formatClock(startTime)}` : 'Pick a start time'}
+              >
+                <Text style={startTime ? styles.pickerValue : styles.pickerPlaceholder}>
+                  {startTime ? formatClock(startTime) : 'Any time'}
+                </Text>
+              </Pressable>
             </View>
             <View style={styles.pairItem}>
-              <TextField label="End (HH:MM)" value={endTime} onChangeText={setEndTime} placeholder="18:00" keyboardType="numbers-and-punctuation" mono />
+              <Text style={styles.miniLabel}>End</Text>
+              <Pressable
+                onPress={() => setPicker('end')}
+                style={styles.pickerField}
+                accessibilityRole="button"
+                accessibilityLabel={endTime ? `End time ${formatClock(endTime)}` : 'Pick an end time'}
+              >
+                <Text style={endTime ? styles.pickerValue : styles.pickerPlaceholder}>
+                  {endTime ? formatClock(endTime) : 'Any time'}
+                </Text>
+              </Pressable>
             </View>
           </View>
 
@@ -312,10 +351,30 @@ export function DealSubmissionForm({ onAddRestaurant }: { onAddRestaurant: () =>
           </View>
           <View style={styles.pairRow}>
             <View style={styles.pairItem}>
-              <TextField label="From (MM/DD)" value={validFrom} onChangeText={setValidFrom} placeholder="09/16" keyboardType="numbers-and-punctuation" mono />
+              <Text style={styles.miniLabel}>From</Text>
+              <Pressable
+                onPress={() => setPicker('from')}
+                style={styles.pickerField}
+                accessibilityRole="button"
+                accessibilityLabel={validFrom ? `From ${mmddLabel(validFrom)}` : 'Pick a start date'}
+              >
+                <Text style={validFrom ? styles.pickerValue : styles.pickerPlaceholder}>
+                  {validFrom ? mmddLabel(validFrom) : 'Pick a date'}
+                </Text>
+              </Pressable>
             </View>
             <View style={styles.pairItem}>
-              <TextField label="Through (MM/DD)" value={validThrough} onChangeText={setValidThrough} placeholder="09/20" keyboardType="numbers-and-punctuation" mono />
+              <Text style={styles.miniLabel}>Through</Text>
+              <Pressable
+                onPress={() => setPicker('through')}
+                style={styles.pickerField}
+                accessibilityRole="button"
+                accessibilityLabel={validThrough ? `Through ${mmddLabel(validThrough)}` : 'Pick an end date'}
+              >
+                <Text style={validThrough ? styles.pickerValue : styles.pickerPlaceholder}>
+                  {validThrough ? mmddLabel(validThrough) : 'Pick a date'}
+                </Text>
+              </Pressable>
             </View>
           </View>
         </>
@@ -339,6 +398,47 @@ export function DealSubmissionForm({ onAddRestaurant }: { onAddRestaurant: () =>
         onPress={handleSubmit}
         disabled={submitting}
         style={{ marginTop: spacing.md }}
+      />
+
+      {/* Pick-only time/date popups (invalid values are impossible) */}
+      <TimePickerModal
+        visible={picker === 'start'}
+        title="Start time"
+        value={startTime || null}
+        onSelect={(t) => { setStartTime(t); setPicker(null); }}
+        onClear={() => { setStartTime(''); setPicker(null); }}
+        onClose={() => setPicker(null)}
+      />
+      <TimePickerModal
+        visible={picker === 'end'}
+        title="End time"
+        value={endTime || null}
+        onSelect={(t) => { setEndTime(t); setPicker(null); }}
+        onClear={() => { setEndTime(''); setPicker(null); }}
+        onClose={() => setPicker(null)}
+      />
+      <CalendarPickerModal
+        visible={picker === 'from'}
+        title="Start date"
+        selected={mmddToDate(validFrom)}
+        onSelect={(d) => {
+          setValidFrom(mmdd(d));
+          // If the end date is now before the start, clear it.
+          const thr = mmddToDate(validThrough);
+          if (thr && thr < d) setValidThrough('');
+          setPicker(null);
+        }}
+        onClear={() => { setValidFrom(''); setPicker(null); }}
+        onClose={() => setPicker(null)}
+      />
+      <CalendarPickerModal
+        visible={picker === 'through'}
+        title="End date"
+        selected={mmddToDate(validThrough)}
+        minDate={mmddToDate(validFrom)}
+        onSelect={(d) => { setValidThrough(mmdd(d)); setPicker(null); }}
+        onClear={() => { setValidThrough(''); setPicker(null); }}
+        onClose={() => setPicker(null)}
       />
     </View>
   );
@@ -421,6 +521,24 @@ const styles = StyleSheet.create({
   chipTextOn: { color: '#FFFFFF' },
   pairRow: { flexDirection: 'row', gap: spacing.md },
   pairItem: { flex: 1 },
+  miniLabel: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 12,
+    color: colors.inkSoft,
+    marginBottom: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  pickerField: {
+    minHeight: 46,
+    justifyContent: 'center',
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.line,
+    paddingHorizontal: spacing.md,
+  },
+  pickerValue: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.ink },
+  pickerPlaceholder: { fontFamily: fonts.body, fontSize: 16, color: colors.inkFaint },
   toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',

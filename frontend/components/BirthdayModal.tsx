@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, fonts, radii, spacing } from '../theme/theme';
-import { isValidBirthday, sanitizeBirthdayInput, toStoredBirthday } from '../utils/birthday';
+import { BirthdayPicker } from './BirthdayPicker';
 import { PrimaryButton } from './PrimaryButton';
-import { TextField } from './TextField';
 
 interface Props {
   visible: boolean;
@@ -13,18 +12,22 @@ interface Props {
 }
 
 export function BirthdayModal({ visible, currentBirthday, onClose, onSave }: Props) {
-  const [birthday, setBirthday] = useState(() =>
-    currentBirthday ? currentBirthday.replace('-', '/') : '',
-  );
+  // Stored "MM-DD" (or ""). The picker only emits valid values.
+  const [birthday, setBirthday] = useState(currentBirthday);
   const [error, setError] = useState<string | null>(null);
 
+  // Re-sync when reopened with a different saved birthday.
+  useEffect(() => {
+    if (visible) setBirthday(currentBirthday);
+  }, [visible, currentBirthday]);
+
   const handleSave = () => {
-    if (!isValidBirthday(birthday)) {
-      setError('Enter your birthday as MM/DD.');
+    if (!birthday) {
+      setError('Pick your birthday.');
       return;
     }
     setError(null);
-    onSave(toStoredBirthday(birthday));
+    onSave(birthday);
     onClose();
   };
 
@@ -38,18 +41,13 @@ export function BirthdayModal({ visible, currentBirthday, onClose, onSave }: Pro
             We use your birthday to surface birthday deals during your special day, week, or month.
           </Text>
 
-          <TextField
-            label="Birthday (MM/DD)"
+          <BirthdayPicker
             value={birthday}
-            onChangeText={(t) => {
-              setBirthday(sanitizeBirthdayInput(t));
+            onChange={(v) => {
+              setBirthday(v);
               if (error) setError(null);
             }}
-            placeholder="07/04"
-            keyboardType="number-pad"
-            maxLength={5}
-            error={error}
-            mono
+            error={error ?? undefined}
           />
 
           <PrimaryButton label="Save birthday" onPress={handleSave} />
