@@ -1,5 +1,5 @@
 import * as Location from 'expo-location';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { createRestaurant, placesAutocomplete, PlaceSuggestion } from '../data/api';
 import { colors, fonts, radii, spacing } from '../theme/theme';
@@ -42,6 +42,8 @@ export function RestaurantSubmissionForm() {
   const [searching, setSearching] = useState(false);
   const [selected, setSelected] = useState<{ name: string; address: string; lat: number; lng: number } | null>(null);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | undefined>(undefined);
+  // Search is limited to 50mi around the device, so a location is REQUIRED.
+  const [locStatus, setLocStatus] = useState<'loading' | 'ready' | 'denied'>('loading');
   // Website (for the logo) — prefilled from Places when available, still editable.
   const [url, setUrl] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -50,26 +52,34 @@ export function RestaurantSubmissionForm() {
   const [submitted, setSubmitted] = useState(false);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Bias suggestions to the device location (best-effort; ignored if denied).
-  useEffect(() => {
-    (async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') return;
-        const pos = await Location.getCurrentPositionAsync({});
-        setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-      } catch {
-        /* no location — autocomplete still works, just unbiased */
+  // Get the device location — required to search (results are within 50mi of it).
+  const requestLocation = useCallback(async () => {
+    setLocStatus('loading');
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setLocStatus('denied');
+        return;
       }
-    })();
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      setLocStatus('ready');
+    } catch {
+      setLocStatus('denied');
+    }
   }, []);
+  useEffect(() => {
+    requestLocation();
+  }, [requestLocation]);
 
   // Debounced autocomplete on the typed restaurant name.
   useEffect(() => {
     if (selected) return; // already picked
     const q = query.trim();
     if (debounce.current) clearTimeout(debounce.current);
-    if (q.length < 2) {
+    if (q.length < 3 || !coords) {
+      // Wait for 3+ chars (fewer API calls) and a device location (required —
+      // results are limited to 50mi around the user).
       setSuggestions([]);
       setSearching(false);
       return;
@@ -89,7 +99,8 @@ export function RestaurantSubmissionForm() {
   const host = useMemo(() => hostOf(url), [url]);
   const logoUrl = useMemo(() => faviconFor(host), [host]);
   const showLogo = host.includes('.');
-  const noResults = !searching && query.trim().length >= 2 && suggestions.length === 0;
+  const noResults =
+    !searching && !!coords && query.trim().length >= 3 && suggestions.length === 0;
 
   const pick = (s: PlaceSuggestion) => {
     // LocationIQ suggestions already include the full address + coords.
@@ -179,6 +190,18 @@ export function RestaurantSubmissionForm() {
             />
             {searching ? <ActivityIndicator size="small" color={colors.tomato} style={styles.searchSpin} /> : null}
           </View>
+          {locStatus === 'denied' ? (
+            <View style={styles.locHint}>
+              <Text style={styles.locHintText}>
+                Turn on location to search for places within 50 miles of you.
+              </Text>
+              <Pressable onPress={requestLocation} accessibilityRole="button">
+                <Text style={styles.locHintLink}>Enable location</Text>
+              </Pressable>
+            </View>
+          ) : locStatus === 'loading' && query.trim().length >= 3 ? (
+            <Text style={styles.locLoading}>Finding your location…</Text>
+          ) : null}
           {suggestions.map((s) => (
             <Pressable
               key={s.placeId}
@@ -268,6 +291,10 @@ const styles = StyleSheet.create({
     color: colors.inkSoft,
     paddingVertical: spacing.md,
   },
+  locHint: { paddingVertical: spacing.md, gap: spacing.xs },
+  locHintText: { fontFamily: fonts.bodySemi, fontSize: 14, color: colors.inkSoft, lineHeight: 19 },
+  locHintLink: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.tomato },
+  locLoading: { fontFamily: fonts.bodySemi, fontSize: 14, color: colors.inkSoft, paddingVertical: spacing.md },
   errText: { fontFamily: fonts.bodySemi, fontSize: 13, color: colors.tomatoDeep, marginTop: spacing.xs },
   selectedRow: {
     flexDirection: 'row',
