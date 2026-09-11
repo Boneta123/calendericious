@@ -69,12 +69,15 @@ model Restaurant {
   address String? // street address (crowdsourced submissions)
   lat     Float? // set for a user-added local spot (from the picked place); null for a chain
   lng     Float?
+  submittedByUserId String? // user who crowdsourced this row (null for admin/seed); powers the 2/day cap. Audit field, no FK.
 
   deals Deal[]
   users UserRestaurant[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([submittedByUserId])
 }
 
 /// Food vendor = a place selling prepared/packaged food that ISN'T a restaurant
@@ -90,12 +93,15 @@ model FoodVendor {
   address String? // street address (crowdsourced submissions)
   lat     Float? // set for a user-added local spot (from the picked place); null for a chain
   lng     Float?
+  submittedByUserId String? // user who crowdsourced this row (null for admin/seed); powers the 2/day cap. Audit field, no FK.
 
   deals Deal[]
   users UserFoodVendor[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([submittedByUserId])
 }
 
 /// A user's selected restaurants — explicit many-to-many join.

@@ -1,14 +1,14 @@
-import * as Location from 'expo-location';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { createRestaurant, placesAutocomplete, PlaceSuggestion } from '../data/api';
+import React, { useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { createRestaurant, lookupAddress, PlaceCandidate } from '../data/api';
 import { colors, fonts, radii, spacing } from '../theme/theme';
 import { PrimaryButton } from './PrimaryButton';
 import { RestaurantLogo } from './RestaurantLogo';
 import { TextField } from './TextField';
 
-/** Crowdsourced restaurant submission. The restaurant + address come from Google
- *  Places (type the name → pick the location); no manual address entry. */
+/** Crowdsourced restaurant submission. The user types the restaurant's ADDRESS;
+ *  we look up the businesses Google has at that address and the user picks the
+ *  right one (an address can host several). Users may add 2 places per day. */
 export interface RestaurantDraft {
   name: string;
   url: string;
@@ -36,84 +36,66 @@ function MapPin() {
 }
 
 export function RestaurantSubmissionForm() {
-  // Places search
-  const [query, setQuery] = useState('');
-  const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
-  const [searching, setSearching] = useState(false);
-  const [selected, setSelected] = useState<{ name: string; address: string; lat: number; lng: number } | null>(null);
-  const [coords, setCoords] = useState<{ lat: number; lng: number } | undefined>(undefined);
-  // Search is limited to 50mi around the device, so a location is REQUIRED.
-  const [locStatus, setLocStatus] = useState<'loading' | 'ready' | 'denied'>('loading');
-  // Website (for the logo) — prefilled from Places when available, still editable.
+  // Address is entered as separate fields so the user never formats a string.
+  const [street, setStreet] = useState('');
+  const [town, setTown] = useState('');
+  const [stateField, setStateField] = useState('');
+  const [zip, setZip] = useState('');
+  const [verifying, setVerifying] = useState(false);
+  const [candidates, setCandidates] = useState<PlaceCandidate[]>([]);
+  const [selected, setSelected] = useState<PlaceCandidate | null>(null);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [dailyLimited, setDailyLimited] = useState(false);
+  // Website (for the logo) — editable; the logo is pulled from its favicon.
   const [url, setUrl] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Get the device location — required to search (results are within 50mi of it).
-  const requestLocation = useCallback(async () => {
-    setLocStatus('loading');
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setLocStatus('denied');
-        return;
-      }
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-      setLocStatus('ready');
-    } catch {
-      setLocStatus('denied');
-    }
-  }, []);
-  useEffect(() => {
-    requestLocation();
-  }, [requestLocation]);
-
-  // Debounced autocomplete on the typed restaurant name.
-  useEffect(() => {
-    if (selected) return; // already picked
-    const q = query.trim();
-    if (debounce.current) clearTimeout(debounce.current);
-    if (q.length < 3 || !coords) {
-      // Wait for 3+ chars (fewer API calls) and a device location (required —
-      // results are limited to 50mi around the user).
-      setSuggestions([]);
-      setSearching(false);
-      return;
-    }
-    setSearching(true);
-    debounce.current = setTimeout(() => {
-      placesAutocomplete(q, coords, 'restaurant')
-        .then((s) => setSuggestions(s))
-        .catch(() => setSuggestions([]))
-        .finally(() => setSearching(false));
-    }, 300);
-    return () => {
-      if (debounce.current) clearTimeout(debounce.current);
-    };
-  }, [query, coords, selected]);
 
   const host = useMemo(() => hostOf(url), [url]);
   const logoUrl = useMemo(() => faviconFor(host), [host]);
   const showLogo = host.includes('.');
-  const noResults =
-    !searching && !!coords && query.trim().length >= 3 && suggestions.length === 0;
 
-  const pick = (s: PlaceSuggestion) => {
-    // LocationIQ suggestions already include the full address + coords.
-    setSelected({ name: s.primary, address: s.secondary, lat: s.lat, lng: s.lng });
-    setQuery('');
-    setSuggestions([]);
-    setErrors((e) => ({ ...e, place: '' }));
+  const check = async () => {
+    setVerifyError(null);
+    if (!street.trim() || (!town.trim() && !stateField.trim() && !zip.trim())) {
+      setVerifyError('Enter at least the street and town.');
+      return;
+    }
+    setVerifying(true);
+    try {
+      const list = await lookupAddress({
+        street: street.trim(), town: town.trim(), state: stateField.trim(), zip: zip.trim(),
+      });
+      setCandidates(list);
+      if (list.length === 1) setSelected(list[0]); // only one place → pick it for them
+      setErrors((e) => ({ ...e, place: '' }));
+    } catch (err) {
+      const status = (err as { status?: number }).status;
+      if (status === 429) setDailyLimited(true);
+      else setVerifyError(err instanceof Error ? err.message : 'Could not look up that address.');
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  // Back to the address fields (a fresh lookup); clears any current results.
+  const editAddress = () => {
+    setCandidates([]);
+    setSelected(null);
+    setVerifyError(null);
   };
 
   const reset = () => {
-    setQuery('');
-    setSuggestions([]);
+    setStreet('');
+    setTown('');
+    setStateField('');
+    setZip('');
+    setCandidates([]);
     setSelected(null);
+    setVerifyError(null);
+    setDailyLimited(false);
     setUrl('');
     setErrors({});
     setFormError(null);
@@ -123,15 +105,15 @@ export function RestaurantSubmissionForm() {
 
   const handleSubmit = async () => {
     const next: Record<string, string> = {};
-    if (!selected) next.place = 'Search and select your restaurant.';
+    if (!selected) next.place = 'Check the address and pick the restaurant first.';
     if (!/^https?:\/\/\S+\.\S+/.test(url.trim())) next.url = 'Enter a valid website URL (https://…).';
     setErrors(next);
     if (Object.keys(next).length > 0 || !selected) return;
 
     const draft: RestaurantDraft = {
-      name: selected.name,
+      name: selected.primary,
       url: url.trim(),
-      address: selected.address,
+      address: selected.secondary,
       logoUrl,
       lat: selected.lat,
       lng: selected.lng,
@@ -142,7 +124,9 @@ export function RestaurantSubmissionForm() {
       await createRestaurant(draft);
       setSubmitted(true);
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Could not submit. Try again.');
+      const status = (err as { status?: number }).status;
+      if (status === 429) setDailyLimited(true);
+      else setFormError(err instanceof Error ? err.message : 'Could not submit. Try again.');
     } finally {
       setSubmitting(false);
     }
@@ -158,66 +142,99 @@ export function RestaurantSubmissionForm() {
     );
   }
 
+  if (dailyLimited) {
+    return (
+      <View style={styles.success}>
+        <Text style={styles.successTitle}>Daily limit reached</Text>
+        <Text style={styles.successSub}>You can add 2 places per day. Come back tomorrow to add more.</Text>
+      </View>
+    );
+  }
+
   return (
     <View>
       <Text style={styles.intro}>
-        Search your restaurant and pick its location — the address fills in for you.
+        Enter the restaurant's address — we'll list the places there so you can pick the right one.
       </Text>
 
-      <Text style={styles.label}>Restaurant</Text>
+      <Text style={styles.label}>Restaurant address</Text>
       {selected ? (
         <View style={styles.selectedRow}>
           <MapPin />
           <View style={{ flex: 1 }}>
-            <Text style={styles.selectedName} numberOfLines={1}>{selected.name}</Text>
-            <Text style={styles.selectedAddr} numberOfLines={2}>{selected.address}</Text>
+            <Text style={styles.selectedName} numberOfLines={1}>{selected.primary}</Text>
+            <Text style={styles.selectedAddr} numberOfLines={2}>{selected.secondary}</Text>
           </View>
           <Pressable onPress={() => setSelected(null)} accessibilityRole="button">
             <Text style={styles.change}>Change</Text>
           </Pressable>
         </View>
-      ) : (
+      ) : candidates.length > 0 ? (
         <>
-          <View style={styles.searchWrap}>
-            <TextInput
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Search a restaurant…"
-              placeholderTextColor={colors.inkFaint}
-              autoCorrect={false}
-              style={styles.search}
-              accessibilityLabel="Search for a restaurant"
-            />
-            {searching ? <ActivityIndicator size="small" color={colors.tomato} style={styles.searchSpin} /> : null}
-          </View>
-          {locStatus === 'denied' ? (
-            <View style={styles.locHint}>
-              <Text style={styles.locHintText}>
-                Turn on location to search for places within 50 miles of you.
-              </Text>
-              <Pressable onPress={requestLocation} accessibilityRole="button">
-                <Text style={styles.locHintLink}>Enable location</Text>
-              </Pressable>
-            </View>
-          ) : locStatus === 'loading' && query.trim().length >= 3 ? (
-            <Text style={styles.locLoading}>Finding your location…</Text>
-          ) : null}
-          {suggestions.map((s) => (
+          <Text style={styles.pickHint}>Pick the place at this address:</Text>
+          {candidates.map((c, i) => (
             <Pressable
-              key={s.placeId}
-              onPress={() => pick(s)}
-              style={({ pressed }) => [styles.suggestion, pressed && styles.suggestionPressed]}
+              key={c.placeId || `${c.primary}-${i}`}
+              onPress={() => setSelected(c)}
+              style={({ pressed }) => [styles.candidate, pressed && styles.candidatePressed]}
               accessibilityRole="button"
-              accessibilityLabel={`${s.primary}, ${s.secondary}`}
+              accessibilityLabel={`${c.primary}, ${c.secondary}`}
             >
               <MapPin />
               <View style={{ flex: 1 }}>
-                <Text style={styles.sugPrimary} numberOfLines={1}>{s.primary}</Text>
-                {!!s.secondary && <Text style={styles.sugSecondary} numberOfLines={1}>{s.secondary}</Text>}
+                <Text style={styles.candidateName} numberOfLines={1}>{c.primary}</Text>
+                {!!c.secondary && <Text style={styles.candidateAddr} numberOfLines={1}>{c.secondary}</Text>}
               </View>
             </Pressable>
           ))}
-          {noResults && <Text style={styles.noResults}>no locations found check for typos</Text>}
+          <Pressable onPress={editAddress} accessibilityRole="button" style={styles.editAddress}>
+            <Text style={styles.editAddressText}>Use a different address</Text>
+          </Pressable>
+        </>
+      ) : (
+        <>
+          <TextField
+            label="Street address"
+            value={street}
+            onChangeText={setStreet}
+            placeholder="704 Front St"
+            autoCapitalize="words"
+          />
+          <TextField
+            label="Town / City"
+            value={town}
+            onChangeText={setTown}
+            placeholder="Binghamton"
+            autoCapitalize="words"
+          />
+          <TextField
+            label="State"
+            value={stateField}
+            onChangeText={setStateField}
+            placeholder="NY"
+            autoCapitalize="characters"
+          />
+          <TextField
+            label="ZIP code"
+            value={zip}
+            onChangeText={setZip}
+            placeholder="13905"
+            keyboardType="number-pad"
+            maxLength={10}
+          />
+          <Pressable
+            onPress={check}
+            disabled={verifying}
+            style={({ pressed }) => [styles.verifyBtn, pressed && styles.verifyBtnPressed]}
+            accessibilityRole="button"
+          >
+            {verifying ? (
+              <ActivityIndicator size="small" color={colors.tomato} />
+            ) : (
+              <Text style={styles.verifyBtnText}>Check address</Text>
+            )}
+          </Pressable>
+          {verifyError ? <Text style={styles.errText}>{verifyError}</Text> : null}
           {errors.place ? <Text style={styles.errText}>{errors.place}</Text> : null}
         </>
       )}
@@ -232,7 +249,7 @@ export function RestaurantSubmissionForm() {
       />
       {showLogo ? (
         <View style={styles.logoPreview}>
-          <RestaurantLogo restaurant={{ name: selected?.name || host, logoUrl }} size={44} />
+          <RestaurantLogo restaurant={{ name: selected?.primary || host, logoUrl }} size={44} />
           <View style={{ flex: 1 }}>
             <Text style={styles.logoTitle}>Logo preview</Text>
             <Text style={styles.logoSub}>Pulled from the website — this is the icon we'll use.</Text>
@@ -244,7 +261,7 @@ export function RestaurantSubmissionForm() {
       <PrimaryButton
         label={submitting ? 'Submitting…' : 'Submit restaurant'}
         onPress={handleSubmit}
-        disabled={submitting}
+        disabled={submitting || !selected}
         style={{ marginTop: spacing.sm }}
       />
     </View>
@@ -259,43 +276,37 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
     lineHeight: 21,
   },
-  label: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.ink, marginBottom: spacing.xs },
-  searchWrap: { justifyContent: 'center' },
-  search: {
-    backgroundColor: colors.card,
+  label: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.ink, marginBottom: spacing.sm },
+  verifyBtn: {
+    marginTop: spacing.sm,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: colors.line,
+    borderColor: colors.tomato,
     paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    paddingRight: 40,
-    fontFamily: fonts.bodySemi,
-    fontSize: 16,
-    color: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
   },
-  searchSpin: { position: 'absolute', right: spacing.md },
-  suggestion: {
+  verifyBtnPressed: { backgroundColor: colors.tomatoWash },
+  verifyBtnText: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.tomato },
+  errText: { fontFamily: fonts.bodySemi, fontSize: 13, color: colors.tomatoDeep, marginTop: spacing.xs },
+  pickHint: { fontFamily: fonts.bodySemi, fontSize: 14, color: colors.inkSoft, marginBottom: spacing.sm },
+  candidate: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.sm,
-    borderRadius: radii.sm,
-  },
-  suggestionPressed: { backgroundColor: colors.tomatoWash },
-  sugPrimary: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.ink },
-  sugSecondary: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSoft, marginTop: 1 },
-  noResults: {
-    fontFamily: fonts.bodySemi,
-    fontSize: 14,
-    color: colors.inkSoft,
     paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.line,
+    marginBottom: spacing.sm,
   },
-  locHint: { paddingVertical: spacing.md, gap: spacing.xs },
-  locHintText: { fontFamily: fonts.bodySemi, fontSize: 14, color: colors.inkSoft, lineHeight: 19 },
-  locHintLink: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.tomato },
-  locLoading: { fontFamily: fonts.bodySemi, fontSize: 14, color: colors.inkSoft, paddingVertical: spacing.md },
-  errText: { fontFamily: fonts.bodySemi, fontSize: 13, color: colors.tomatoDeep, marginTop: spacing.xs },
+  candidatePressed: { backgroundColor: colors.tomatoWash },
+  candidateName: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.ink },
+  candidateAddr: { fontFamily: fonts.body, fontSize: 13, color: colors.inkSoft, marginTop: 1 },
+  editAddress: { paddingVertical: spacing.sm, alignSelf: 'flex-start' },
+  editAddressText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.tomato },
   selectedRow: {
     flexDirection: 'row',
     alignItems: 'center',

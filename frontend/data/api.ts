@@ -152,11 +152,12 @@ export function deleteDeal(id: string): Promise<{ ok: boolean }> {
   return sendJson<{ ok: boolean }>(`/api/deals/${id}`, 'DELETE');
 }
 
-// --- Place autocomplete (via the backend proxy → LocationIQ) ---------------
+// --- Address verify (via the backend proxy → LocationIQ) -------------------
 
-/** One suggestion: `primary` = place/name, `secondary` = full formatted address,
- *  plus the place's coordinates (stored on submit for the "Near me" filter). */
-export interface PlaceSuggestion {
+/** One business Google found at the looked-up address. `primary` = business
+ *  name, `secondary` = its formatted address; coords are stored on submit for
+ *  the "Near me" filter. The user picks the right one from the returned list. */
+export interface PlaceCandidate {
   placeId: string;
   primary: string;
   secondary: string;
@@ -164,19 +165,23 @@ export interface PlaceSuggestion {
   lng: number;
 }
 
-/** Food-POI suggestions of `kind` ('restaurant' | 'food'), biased to `coords`
- *  when given. Each result already carries the full address in `secondary`. */
-export function placesAutocomplete(
-  input: string,
-  coords?: { lat: number; lng: number },
-  kind: 'restaurant' | 'food' = 'restaurant',
-): Promise<PlaceSuggestion[]> {
-  const params = new URLSearchParams({ input, type: kind });
-  if (coords) {
-    params.set('lat', String(coords.lat));
-    params.set('lng', String(coords.lng));
-  }
-  return sendJson<PlaceSuggestion[]>(`/api/places/autocomplete?${params.toString()}`, 'GET');
+/** The address the user enters as separate fields (no manual formatting). */
+export interface AddressParts {
+  street: string;
+  town: string;
+  state: string;
+  zip: string;
+}
+
+/** Look up the businesses at an address. Returns the candidate list (an address
+ *  can host several — the user picks). REJECTS with `.status === 422` when the
+ *  address can't be found; `.status === 502` when the lookup service errors. */
+export function lookupAddress(parts: AddressParts): Promise<PlaceCandidate[]> {
+  return sendJson<{ candidates: PlaceCandidate[]; formattedAddress: string }>(
+    '/api/places/geocode-verify',
+    'POST',
+    { ...parts },
+  ).then((r) => r.candidates);
 }
 
 // --- Crowdsourcing submissions (persist to the DB) -------------------------
@@ -263,7 +268,10 @@ async function sendJson<T>(path: string, method: string, body?: unknown): Promis
   const res = await fetch(`${API_BASE}${path}`, init);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error((data && (data as { error?: string }).error) || `Request failed (${res.status})`);
+    // Attach the HTTP status so callers can branch (e.g. 422 verify-fail vs 429 cap).
+    const err = new Error((data && (data as { error?: string }).error) || `Request failed (${res.status})`);
+    (err as Error & { status?: number }).status = res.status;
+    throw err;
   }
   return data as T;
 }

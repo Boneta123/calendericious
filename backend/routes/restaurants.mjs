@@ -25,7 +25,7 @@ export const URL_RE = /^https?:\/\/\S+\.\S+/;
  * address (a local place); an admin-seeded chain has none. Throws a tagged
  * error `{ status, message }` on validation/duplicate so callers map it to HTTP.
  */
-export async function createBrand(model, { name, url, address, logoUrl, lat, lng } = {}) {
+export async function createBrand(model, { name, url, address, logoUrl, lat, lng, submittedByUserId } = {}) {
   if (typeof name !== 'string' || !name.trim())
     throw { status: 400, message: 'A name is required.' };
   if (typeof url !== 'string' || !URL_RE.test(url.trim()))
@@ -40,6 +40,7 @@ export async function createBrand(model, { name, url, address, logoUrl, lat, lng
   // both are finite; a chain (no address) stays null → excluded from "Near me".
   const latN = addr && Number.isFinite(Number(lat)) ? Number(lat) : null;
   const lngN = addr && Number.isFinite(Number(lng)) ? Number(lng) : null;
+  const submitter = typeof submittedByUserId === 'string' && submittedByUserId ? submittedByUserId : null;
 
   // Reject a website that already exists (dedupe by brand key) before insert.
   const existing = await model.findUnique({ where: { url: url.trim() } });
@@ -47,7 +48,10 @@ export async function createBrand(model, { name, url, address, logoUrl, lat, lng
 
   try {
     return await model.create({
-      data: { id, name: name.trim(), url: url.trim(), host, logoUrl: logo, address: addr, lat: latN, lng: lngN },
+      data: {
+        id, name: name.trim(), url: url.trim(), host, logoUrl: logo,
+        address: addr, lat: latN, lng: lngN, submittedByUserId: submitter,
+      },
     });
   } catch (err) {
     // P2002 = unique violation (same website, or same slug id from the name).
@@ -56,10 +60,37 @@ export async function createBrand(model, { name, url, address, logoUrl, lat, lng
   }
 }
 
-/** Route wrapper: create a brand from the request body, mapping tagged errors. */
+// Users may crowdsource at most this many places per calendar day (restaurants
+// AND food vendors combined). Guards against spam / runaway LocationIQ usage.
+const DAILY_SUBMISSION_CAP = 2;
+
+/** Start of the current calendar day in server-local time. */
+function startOfToday() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+/** Throw 429 if the user already hit the combined daily submission cap. */
+async function enforceDailyCap(userId) {
+  const since = startOfToday();
+  const where = { submittedByUserId: userId, createdAt: { gte: since } };
+  const [r, f] = await Promise.all([
+    prisma.restaurant.count({ where }),
+    prisma.foodVendor.count({ where }),
+  ]);
+  if (r + f >= DAILY_SUBMISSION_CAP) {
+    throw { status: 429, message: `Daily limit reached — you can add ${DAILY_SUBMISSION_CAP} places per day.` };
+  }
+}
+
+/** Route wrapper: create a brand from the request body, mapping tagged errors.
+ *  Enforces the per-user daily cap and stamps the submitter (auth-gated route). */
 async function createVendor(model, req, res, next) {
   try {
-    const row = await createBrand(model, req.body ?? {});
+    const userId = req.user.id;
+    await enforceDailyCap(userId);
+    const row = await createBrand(model, { ...(req.body ?? {}), submittedByUserId: userId });
     res.status(201).json(row);
   } catch (err) {
     if (err && err.status) return res.status(err.status).json({ error: err.message });
